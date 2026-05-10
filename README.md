@@ -1,98 +1,136 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Okapi Real Estate API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A RESTful backend API for a real estate platform, built with NestJS, Prisma, and JWT authentication.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Tech Stack
 
-## Description
+- **Framework:** NestJS (Node.js + TypeScript)
+- **ORM:** Prisma
+- **Auth:** JWT (separate user and admin strategies)
+- **Validation:** class-validator + class-transformer
+- **API Docs:** Swagger (`/api`)
+- **Package Manager:** pnpm
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Getting Started
 
-## Project setup
+### Install dependencies
 
 ```bash
-$ pnpm install
+pnpm install
 ```
 
-## Compile and run the project
+### Environment variables
+
+Create a `.env` file at the root with at least:
+
+```env
+DATABASE_URL="your-database-url"
+JWT_SECRET="your-jwt-secret"
+JWT_ADMIN_SECRET="your-admin-jwt-secret"
+PORT=8080
+```
+
+### Run the app
 
 ```bash
-# development
-$ pnpm run start
+# development (watch mode)
+pnpm run start:dev
 
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+# production
+pnpm run start:prod
 ```
 
-## Run tests
+The server starts on `http://localhost:8080` by default.  
+Swagger UI is available at `http://localhost:8080/api`.
+
+## API Overview
+
+### Authentication
+
+| Method | Endpoint         | Description          | Auth      |
+|--------|-----------------|----------------------|-----------|
+| POST   | `/auth/register` | Register a new user  | Public    |
+| POST   | `/auth/login`    | Login and get JWT    | Public    |
+
+---
+
+### Properties
+
+| Method | Endpoint           | Description              | Auth       |
+|--------|--------------------|--------------------------|------------|
+| GET    | `/properties`      | List properties (filtered)| Public    |
+| GET    | `/properties/:id`  | Get a single property    | Public     |
+| POST   | `/properties`      | Create a property        | Admin JWT  |
+| PATCH  | `/properties/:id`  | Update a property        | Admin JWT  |
+| DELETE | `/properties/:id`  | Delete a property        | Admin JWT  |
+
+#### `GET /properties` — Query Parameters
+
+| Parameter     | Type    | Description                              |
+|---------------|---------|------------------------------------------|
+| `listingType` | string  | Filter by listing type (e.g. `sale`, `rent`) |
+| `category`    | string  | Property category (e.g. `apartment`, `house`) |
+| `city`        | string  | City name                                |
+| `suburb`      | string  | Suburb name                              |
+| `minPrice`    | number  | Minimum price                            |
+| `maxPrice`    | number  | Maximum price                            |
+| `bedrooms`    | integer | Number of bedrooms                       |
+| `bathrooms`   | integer | Number of bathrooms                      |
+| `minArea`     | number  | Minimum area in m²                       |
+| `maxArea`     | number  | Maximum area in m²                       |
+| `period`      | string  | Rental period (e.g. `monthly`, `yearly`) |
+| `verified`    | boolean | Only show verified listings (`true`/`false`) |
+| `premium`     | boolean | Only show premium listings (`true`/`false`)  |
+| `page`        | integer | Page number (default: `1`)               |
+| `limit`       | integer | Results per page (default: `10`, max: `100`) |
+
+**Example:**
+```
+GET /properties?city=Kinshasa&listingType=rent&minPrice=500&maxPrice=2000&bedrooms=2&page=1&limit=20
+```
+
+---
+
+### Agencies
+
+| Method | Endpoint          | Description         | Auth      |
+|--------|-------------------|---------------------|-----------|
+| GET    | `/agencies`       | List agencies        | Public    |
+| GET    | `/agencies/:id`   | Get a single agency  | Public    |
+| POST   | `/agencies`       | Create an agency     | Admin JWT |
+| PATCH  | `/agencies/:id`   | Update an agency     | Admin JWT |
+| DELETE | `/agencies/:id`   | Delete an agency     | Admin JWT |
+
+---
+
+### Agents
+
+| Method | Endpoint        | Description        | Auth      |
+|--------|-----------------|--------------------|-----------|
+| GET    | `/agents`       | List agents        | Public    |
+| GET    | `/agents/:id`   | Get a single agent | Public    |
+| POST   | `/agents`       | Create an agent    | Admin JWT |
+| PATCH  | `/agents/:id`   | Update an agent    | Admin JWT |
+| DELETE | `/agents/:id`   | Delete an agent    | Admin JWT |
+
+---
+
+### Users
+
+| Method | Endpoint      | Description      | Auth     |
+|--------|---------------|------------------|----------|
+| GET    | `/users`      | List users       | User JWT |
+| PATCH  | `/users/:id`  | Update a user    | User JWT |
+
+## Testing
 
 ```bash
 # unit tests
-$ pnpm run test
+pnpm run test
 
 # e2e tests
-$ pnpm run test:e2e
+pnpm run test:e2e
 
-# test coverage
-$ pnpm run test:cov
+# coverage
+pnpm run test:cov
 ```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
