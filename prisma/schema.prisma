@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model User {
+  id           String   @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phoneNumber  String
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Agency {
+  id              String   @id @default(uuid())
+  name            String
+  monogram        String
+  accentClass     String
+  tagline         String
+  description     String
+  address         String
+  phone           String
+  email           String
+  website         String?
+  founded         Int
+  agentCount      Int      @default(0)
+  listingCount    Int      @default(0)
+  closedDeals     Int      @default(0)
+  specializations String[]
+  areasServed     String[]
+  languages       String[]
+  certifications  String[]
+
+  agents     Agent[]
+  properties Property[]
+}
+
+model Agent {
+  id               String  @id @default(uuid())
+  agencyId         String
+  agency           Agency  @relation(fields: [agencyId], references: [id])
+
+  name             String
+  title            String
+  specialization   String
+  nationality      String
+  languages        String[]
+  yearsExperience  Int
+  experienceSince  Int
+  rating           Float
+  ratingsCount     Int
+  responseMinutes  Int
+  brokerLicense    String
+  forSaleCount     Int     @default(0)
+  forRentCount     Int     @default(0)
+  closedDeals      Int     @default(0)
+  totalDealsValueUsd Float @default(0)
+  bio              String
+  photo            String
+  photoGradient    String
+  agencyAccent     String
+  agencyMonogram   String
+
+  properties       Property[]
+  areasOfExpertise AreaOfExpertise[]
+  trackRecord      TrackRecord[]
+}
+
+model AreaOfExpertise {
+  id          String @id @default(uuid())
+  agentId     String
+  agent       Agent  @relation(fields: [agentId], references: [id])
+
+  name        String
+  description String
+  rating      Float
+  ratings     Int
+  forSale     Int
+  forRent     Int
+  closedDeals Int
+}
+
+model TrackRecord {
+  id           String @id @default(uuid())
+  agentId      String
+  agent        Agent  @relation(fields: [agentId], references: [id])
+
+  location     String
+  building     String
+  dealType     String
+  date         String
+  propertyType String
+  bedrooms     String
+}
+
+model Property {
+  id              String   @id @default(uuid())
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id])
+  agencyId        String
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+
+  listingType     String
+  category        String
+  price           Float
+  currency        String
+  period          String?
+  title           String
+  subtitle        String
+  bedrooms        Int
+  bathrooms       Int
+  areaSqm         Float
+  suburb          String
+  neighborhood    String
+  city            String
+  verified        Boolean  @default(false)
+  premium         Boolean  @default(false)
+  isNew           Boolean  @default(false)
+  listedDaysAgo   Int      @default(0)
+  imageGradient   String
+  iconType        String
+  transaction     String?
+  gallery         String[]
+  amenities       String[]
+
+  description     String?
+  reference       String?
+  zone            String?
+  brokerLicense   String?
+  agentLicense    String?
+  permitNumber    String?
+  availableFrom   String?
+  averagePriceArea Float?
+  averageSizeArea  Float?
+
+  createdAt       DateTime @default(now())
+}
