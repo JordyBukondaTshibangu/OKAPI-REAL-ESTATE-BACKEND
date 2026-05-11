@@ -8,16 +8,33 @@ import { UpdateAgentDto } from './dto/update-agent.dto';
 export class AgentsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll({ page, limit, name, specialization, language, nationality }: FilterAgentDto) {
+  async findAll({ page, limit, search, name, specialization, language, nationality, sortBy, sortOrder }: FilterAgentDto) {
     const skip = (page - 1) * limit;
+    const order = sortOrder ?? 'asc';
     const where: Record<string, unknown> = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { specialization: { contains: search, mode: 'insensitive' } },
+        { bio: { contains: search, mode: 'insensitive' } },
+        { nationality: { contains: search, mode: 'insensitive' } },
+      ];
+    }
     if (name) where.name = { contains: name, mode: 'insensitive' };
     if (specialization) where.specialization = { contains: specialization, mode: 'insensitive' };
     if (language) where.languages = { has: language };
     if (nationality) where.nationality = { equals: nationality, mode: 'insensitive' };
 
+    const orderBy = sortBy === 'agency'
+      ? { agency: { name: order } }
+      : sortBy
+        ? { [sortBy]: order }
+        : { name: 'asc' as const };
+
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.agent.findMany({ skip, take: limit, where, include: { agency: true, areasOfExpertise: true, trackRecord: true } }),
+      this.prisma.agent.findMany({ skip, take: limit, where, orderBy, include: { agency: true, areasOfExpertise: true, trackRecord: true } }),
       this.prisma.agent.count({ where }),
     ]);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };

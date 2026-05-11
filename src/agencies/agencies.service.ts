@@ -8,14 +8,26 @@ import { UpdateAgencyDto } from './dto/update-agency.dto';
 export class AgenciesService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll({ page, limit, name, language }: FilterAgencyDto) {
+  async findAll({ page, limit, search, name, language, sortBy, sortOrder }: FilterAgencyDto) {
     const skip = (page - 1) * limit;
+    const order = sortOrder ?? 'asc';
     const where: Record<string, unknown> = {};
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { tagline: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { address: { contains: search, mode: 'insensitive' } },
+      ];
+    }
     if (name) where.name = { contains: name, mode: 'insensitive' };
     if (language) where.languages = { has: language };
 
+    const orderBy = sortBy ? { [sortBy]: order } : { name: 'asc' as const };
+
     const [data, total] = await this.prisma.$transaction([
-      this.prisma.agency.findMany({ skip, take: limit, where, include: { agents: true } }),
+      this.prisma.agency.findMany({ skip, take: limit, where, orderBy, include: { agents: true } }),
       this.prisma.agency.count({ where }),
     ]);
     return { data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } };

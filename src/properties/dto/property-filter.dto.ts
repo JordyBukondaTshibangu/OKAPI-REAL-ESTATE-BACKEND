@@ -1,8 +1,12 @@
 import { Type, Transform } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 export class PropertyFilterDto extends PaginationDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
   @IsOptional()
   @IsString()
   listingType?: string;
@@ -64,4 +68,12 @@ export class PropertyFilterDto extends PaginationDto {
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   premium?: boolean;
+
+  @IsOptional()
+  @IsIn(['price', 'title', 'listingType', 'category'])
+  sortBy?: 'price' | 'title' | 'listingType' | 'category';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sortOrder?: 'asc' | 'desc';
 }
