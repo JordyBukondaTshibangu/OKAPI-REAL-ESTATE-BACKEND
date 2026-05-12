@@ -44,6 +44,8 @@ model Agency {
   languages       String[]
   certifications  String[]
 
+  createdAt   DateTime @default(now())
+
   agents     Agent[]
   properties Property[]
 }
@@ -73,6 +75,8 @@ model Agent {
   photoGradient    String
   agencyAccent     String
   agencyMonogram   String
+
+  createdAt        DateTime @default(now())
 
   properties       Property[]
   areasOfExpertise AreaOfExpertise[]

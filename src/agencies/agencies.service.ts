@@ -24,7 +24,7 @@ export class AgenciesService {
     if (name) where.name = { contains: name, mode: 'insensitive' };
     if (language) where.languages = { has: language };
 
-    const orderBy = sortBy ? { [sortBy]: order } : { name: 'asc' as const };
+    const orderBy = sortBy ? { [sortBy]: order } : { createdAt: 'desc' as const };
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.agency.findMany({ skip, take: limit, where, orderBy, include: { agents: true } }),

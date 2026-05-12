@@ -31,7 +31,7 @@ export class AgentsService {
       ? { agency: { name: order } }
       : sortBy
         ? { [sortBy]: order }
-        : { name: 'asc' as const };
+        : { createdAt: 'desc' as const };
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.agent.findMany({ skip, take: limit, where, orderBy, include: { agency: true, areasOfExpertise: true, trackRecord: true } }),
