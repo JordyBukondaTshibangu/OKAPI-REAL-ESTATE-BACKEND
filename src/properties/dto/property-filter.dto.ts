@@ -1,6 +1,13 @@
-import { Type, Transform } from 'class-transformer';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { Transform, Type } from "class-transformer";
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from "class-validator";
+import { PaginationDto } from "../../common/dto/pagination.dto";
 
 export class PropertyFilterDto extends PaginationDto {
   @IsOptional()
@@ -60,20 +67,20 @@ export class PropertyFilterDto extends PaginationDto {
   period?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
+  @Transform(({ value }) => value === "true" || value === true)
   @IsBoolean()
   verified?: boolean;
 
   @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
+  @Transform(({ value }) => value === "true" || value === true)
   @IsBoolean()
   premium?: boolean;
 
   @IsOptional()
-  @IsIn(['price', 'title', 'listingType', 'category'])
-  sortBy?: 'price' | 'title' | 'listingType' | 'category';
+  @IsIn(["price", "title", "listingType", "category"])
+  sortBy?: "price" | "title" | "listingType" | "category";
 
   @IsOptional()
-  @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc';
+  @IsIn(["asc", "desc"])
+  sortOrder?: "asc" | "desc";
 }

@@ -1,22 +1,34 @@
-import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { PrismaModule } from './prisma/prisma.module';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
-import { AgenciesModule } from './agencies/agencies.module';
-import { AgentsModule } from './agents/agents.module';
-import { PropertiesModule } from './properties/properties.module';
+import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
+import { AgenciesModule } from "./agencies/agencies.module";
+import { AgentsModule } from "./agents/agents.module";
+import { AlertsModule } from "./alerts/alerts.module";
+import { AuditLogsModule } from "./audit-logs/audit-logs.module";
+import { AuthModule } from "./auth/auth.module";
+import { EnquiriesModule } from "./enquiries/enquiries.module";
+import { FavoritesModule } from "./favorites/favorites.module";
+import { MailModule } from "./mail/mail.module";
+import { PrismaModule } from "./prisma/prisma.module";
+import { PropertiesModule } from "./properties/properties.module";
+import { ReviewsModule } from "./reviews/reviews.module";
+import { UsersModule } from "./users/users.module";
 
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
+    MailModule,
     AuthModule,
     UsersModule,
     AgenciesModule,
     AgentsModule,
     PropertiesModule,
+    FavoritesModule,
+    EnquiriesModule,
+    AlertsModule,
+    ReviewsModule,
+    AuditLogsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

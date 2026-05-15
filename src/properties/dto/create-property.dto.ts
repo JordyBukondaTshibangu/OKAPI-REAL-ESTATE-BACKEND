@@ -1,4 +1,11 @@
-import { IsString, IsInt, IsNumber, IsBoolean, IsArray, IsOptional } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from "class-validator";
 
 export class CreatePropertyDto {
   @IsString() agentId: string;

@@ -1,4 +1,4 @@
-import { IsString, IsInt, IsNumber, IsArray, IsOptional } from 'class-validator';
+import { IsArray, IsInt, IsNumber, IsString } from "class-validator";
 
 export class CreateAgentDto {
   @IsString() agencyId: string;

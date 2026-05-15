@@ -1,5 +1,5 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { IsIn, IsOptional, IsString } from "class-validator";
+import { PaginationDto } from "../../common/dto/pagination.dto";
 
 export class FilterAgentDto extends PaginationDto {
   @IsOptional()
@@ -23,10 +23,10 @@ export class FilterAgentDto extends PaginationDto {
   nationality?: string;
 
   @IsOptional()
-  @IsIn(['name', 'title', 'agency', 'rating', 'closedDeals'])
-  sortBy?: 'name' | 'title' | 'agency' | 'rating' | 'closedDeals';
+  @IsIn(["name", "title", "agency", "rating", "closedDeals"])
+  sortBy?: "name" | "title" | "agency" | "rating" | "closedDeals";
 
   @IsOptional()
-  @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc';
+  @IsIn(["asc", "desc"])
+  sortOrder?: "asc" | "desc";
 }

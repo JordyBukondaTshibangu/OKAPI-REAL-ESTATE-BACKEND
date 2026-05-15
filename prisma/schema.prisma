@@ -8,20 +8,29 @@ datasource db {
 }
 
 model Admin {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String     @id @default(uuid())
+  email        String     @unique
   passwordHash String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
+
+  auditLogs    AuditLog[]
 }
 
 model User {
-  id           String   @id @default(uuid())
-  firstName    String
-  lastName     String
-  email        String   @unique
-  phoneNumber  String
-  passwordHash String
-  createdAt    DateTime @default(now())
+  id                String    @id @default(uuid())
+  firstName         String
+  lastName          String
+  email             String    @unique
+  phoneNumber       String
+  passwordHash      String
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime  @default(now())
+
+  favorites  Favorite[]
+  enquiries  Enquiry[]
+  alerts     Alert[]
+  reviews    Review[]
 }
 
 model Agency {
@@ -81,6 +90,7 @@ model Agent {
   properties       Property[]
   areasOfExpertise AreaOfExpertise[]
   trackRecord      TrackRecord[]
+  reviews          Review[]
 }
 
 model AreaOfExpertise {
@@ -151,4 +161,71 @@ model Property {
   averageSizeArea  Float?
 
   createdAt       DateTime @default(now())
+
+  favorites  Favorite[]
+  enquiries  Enquiry[]
+  reviews    Review[]
+}
+
+model Favorite {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, propertyId])
+}
+
+model Enquiry {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  message    String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  listingType String?
+  category    String?
+  minPrice    Float?
+  maxPrice    Float?
+  city        String?
+  suburb      String?
+  minBedrooms Int?
+  maxBedrooms Int?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Review {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  agentId    String?
+  agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  rating     Int
+  comment    String?
+  createdAt  DateTime  @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  admin      Admin    @relation(fields: [adminId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  details    String?
+  createdAt  DateTime @default(now())
 }

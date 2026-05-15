@@ -1,11 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { PropertiesService } from './properties.service';
-import { PropertyFilterDto } from './dto/property-filter.dto';
-import { CreatePropertyDto } from './dto/create-property.dto';
-import { UpdatePropertyDto } from './dto/update-property.dto';
-import { JwtAdminGuard } from '../auth/guards/jwt-admin.guard';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from "@nestjs/common";
+import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
+import { CreatePropertyDto } from "./dto/create-property.dto";
+import { PropertyFilterDto } from "./dto/property-filter.dto";
+import { UpdatePropertyDto } from "./dto/update-property.dto";
+import { PropertiesService } from "./properties.service";
 
-@Controller('properties')
+@Controller("properties")
 export class PropertiesController {
   constructor(private propertiesService: PropertiesService) {}
 
@@ -14,8 +24,8 @@ export class PropertiesController {
     return this.propertiesService.findAll(filter);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
+  @Get(":id")
+  findOne(@Param("id") id: string) {
     return this.propertiesService.findOne(id);
   }
 
@@ -26,14 +36,14 @@ export class PropertiesController {
   }
 
   @UseGuards(JwtAdminGuard)
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePropertyDto) {
+  @Patch(":id")
+  update(@Param("id") id: string, @Body() dto: UpdatePropertyDto) {
     return this.propertiesService.update(id, dto);
   }
 
   @UseGuards(JwtAdminGuard)
-  @Delete(':id')
-  remove(@Param('id') id: string) {
+  @Delete(":id")
+  remove(@Param("id") id: string) {
     return this.propertiesService.remove(id);
   }
 }
