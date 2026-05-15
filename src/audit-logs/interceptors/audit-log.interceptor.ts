@@ -2,6 +2,7 @@ import {
   CallHandler,
   ExecutionContext,
   Injectable,
+  Logger,
   NestInterceptor,
 } from "@nestjs/common";
 import { Observable } from "rxjs";
@@ -10,18 +11,18 @@ import { AuditLogsService } from "../audit-logs.service";
 
 @Injectable()
 export class AuditLogInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(AuditLogInterceptor.name);
+
   constructor(private auditLogsService: AuditLogsService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const req = context.switchToHttp().getRequest();
-    const user = req.user;
-
-    if (!user || user.role !== "admin") {
-      return next.handle();
-    }
 
     return next.handle().pipe(
       tap(() => {
+        const user = req.user;
+        if (!user || user.role !== "admin") return;
+
         const { method, url, params, body } = req;
         const action = this.deriveAction(method, url);
         const resource = this.deriveResource(url);
@@ -33,7 +34,12 @@ export class AuditLogInterceptor implements NestInterceptor {
 
         this.auditLogsService
           .log({ adminId: user.adminId, action, resource, resourceId, details })
-          .catch(() => {});
+          .catch((err) =>
+            this.logger.error(
+              `Audit log failed [${action} ${resource}]: ${err?.message}`,
+              err?.stack,
+            ),
+          );
       }),
     );
   }
