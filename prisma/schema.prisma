@@ -25,6 +25,7 @@ model User {
   passwordHash      String
   resetToken        String?
   resetTokenExpiry  DateTime?
+  profileImage      String?
   createdAt         DateTime  @default(now())
 
   favorites  Favorite[]
