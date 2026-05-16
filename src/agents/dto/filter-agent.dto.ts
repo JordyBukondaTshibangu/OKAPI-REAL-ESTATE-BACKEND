@@ -12,6 +12,10 @@ export class FilterAgentDto extends PaginationDto {
 
   @IsOptional()
   @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
   specialization?: string;
 
   @IsOptional()

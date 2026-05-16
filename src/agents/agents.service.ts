@@ -13,6 +13,7 @@ export class AgentsService {
     limit,
     search,
     name,
+    title,
     specialization,
     language,
     nationality,
@@ -33,6 +34,7 @@ export class AgentsService {
       ];
     }
     if (name) where.name = { contains: name, mode: "insensitive" };
+    if (title) where.title = { contains: title, mode: "insensitive" };
     if (specialization)
       where.specialization = { contains: specialization, mode: "insensitive" };
     if (language) where.languages = { has: language };
