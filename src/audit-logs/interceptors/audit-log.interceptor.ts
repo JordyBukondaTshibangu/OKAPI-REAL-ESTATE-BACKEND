@@ -24,6 +24,8 @@ export class AuditLogInterceptor implements NestInterceptor {
         if (!user || user.role !== "admin") return;
 
         const { method, url, params, body } = req;
+        if (!["POST", "PATCH", "PUT", "DELETE"].includes(method)) return;
+
         const action = this.deriveAction(method, url);
         const resource = this.deriveResource(url);
         const resourceId = params?.id;
@@ -51,7 +53,6 @@ export class AuditLogInterceptor implements NestInterceptor {
       PATCH: "UPDATE",
       PUT: "UPDATE",
       DELETE: "DELETE",
-      GET: "READ",
     };
     return map[method] ?? method;
   }
