@@ -16,6 +16,14 @@ export class PropertyFilterDto extends PaginationDto {
 
   @IsOptional()
   @IsString()
+  agentId?: string;
+
+  @IsOptional()
+  @IsString()
+  agencyId?: string;
+
+  @IsOptional()
+  @IsString()
   listingType?: string;
 
   @IsOptional()
