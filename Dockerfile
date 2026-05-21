@@ -1,3 +1,4 @@
+# force rebuild v2
 FROM node:20-alpine AS builder
 
 WORKDIR /app
@@ -5,14 +6,15 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Use npm install since there's no package-lock.json
 RUN npm install
 
 COPY . .
 
 RUN npm run build
 
-# ---
+# Debug: show what was built
+RUN echo "=== dist contents ===" && ls -la /app/dist || echo "=== dist is MISSING ==="
+RUN echo "=== checking for main ===" && find /app/dist -name "main*" 2>/dev/null || echo "main not found"
 
 FROM node:20-alpine AS runner
 
@@ -25,4 +27,4 @@ COPY package*.json ./
 
 EXPOSE 3000
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/main.js"]
