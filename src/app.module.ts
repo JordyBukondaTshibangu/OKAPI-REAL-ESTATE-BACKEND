@@ -13,6 +13,8 @@ import { PrismaModule } from "./prisma/prisma.module";
 import { PropertiesModule } from "./properties/properties.module";
 import { ReviewsModule } from "./reviews/reviews.module";
 import { UsersModule } from "./users/users.module";
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { UsersModule } from "./users/users.module";
     ReviewsModule,
     AuditLogsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard,  }],
+  controllers: [AppController],  // ← add this
+
 })
 export class AppModule {}
