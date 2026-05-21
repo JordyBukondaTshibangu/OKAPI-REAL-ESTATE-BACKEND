@@ -5,7 +5,8 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+# Use npm install since there's no package-lock.json
+RUN npm install
 
 COPY . .
 
