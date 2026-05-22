@@ -6,10 +6,12 @@ on:
   push:
     branches:
       - main
+      - qa
+      - dev
 
 jobs:
   deploy:
-    name: Build & Deploy
+    name: Deploy (${{ github.ref_name }})
     runs-on: ubuntu-latest
 
     steps:
@@ -23,10 +25,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
-
-      - name: Generate Prisma client
-        run: npx prisma generate
+        run: npm install
 
       - name: Build NestJS app
         run: npm run build
@@ -34,12 +33,22 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
+      - name: Set Railway Service ID
+        run: |
+          if [ "${{ github.ref_name }}" == "main" ]; then
+            echo "SERVICE_ID=${{ secrets.RAILWAY_SERVICE_ID_PROD }}" >> $GITHUB_ENV
+          elif [ "${{ github.ref_name }}" == "qa" ]; then
+            echo "SERVICE_ID=${{ secrets.RAILWAY_SERVICE_ID_QA }}" >> $GITHUB_ENV
+          elif [ "${{ github.ref_name }}" == "dev" ]; then
+            echo "SERVICE_ID=${{ secrets.RAILWAY_SERVICE_ID_DEV }}" >> $GITHUB_ENV
+          fi
+
       - name: Run Prisma migrations
-        run: railway run --service ${{ secrets.RAILWAY_SERVICE_ID }} npx prisma migrate deploy
+        run: railway run --service ${{ env.SERVICE_ID }} npx prisma migrate deploy
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy to Railway
-        run: railway up --service ${{ secrets.RAILWAY_SERVICE_ID }} --detach
+        run: railway up --service ${{ env.SERVICE_ID }} --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
