@@ -6,19 +6,18 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PropertiesModule = void 0;
+exports.UploadsModule = void 0;
 const common_1 = require("@nestjs/common");
-const uploads_module_1 = require("../uploads/uploads.module");
-const properties_controller_1 = require("./properties.controller");
-const properties_service_1 = require("./properties.service");
-let PropertiesModule = class PropertiesModule {
+const uploads_controller_1 = require("./uploads.controller");
+const uploads_service_1 = require("./uploads.service");
+let UploadsModule = class UploadsModule {
 };
-exports.PropertiesModule = PropertiesModule;
-exports.PropertiesModule = PropertiesModule = __decorate([
+exports.UploadsModule = UploadsModule;
+exports.UploadsModule = UploadsModule = __decorate([
     (0, common_1.Module)({
-        imports: [uploads_module_1.UploadsModule],
-        controllers: [properties_controller_1.PropertiesController],
-        providers: [properties_service_1.PropertiesService],
+        controllers: [uploads_controller_1.UploadsController],
+        providers: [uploads_service_1.UploadsService],
+        exports: [uploads_service_1.UploadsService],
     })
-], PropertiesModule);
-//# sourceMappingURL=properties.module.js.map
+], UploadsModule);
+//# sourceMappingURL=uploads.module.js.map

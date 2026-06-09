@@ -12,6 +12,7 @@ import { MailModule } from "./mail/mail.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { PropertiesModule } from "./properties/properties.module";
 import { ReviewsModule } from "./reviews/reviews.module";
+import { UploadsModule } from "./uploads/uploads.module";
 import { UsersModule } from "./users/users.module";
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -31,6 +32,7 @@ import { AppService } from './app.service';
     AlertsModule,
     ReviewsModule,
     AuditLogsModule,
+    UploadsModule,
   ],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard,  }],
   controllers: [AppController],  // ← add this

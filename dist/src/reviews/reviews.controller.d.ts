@@ -13,8 +13,8 @@ export declare class ReviewsController {
         id: string;
         createdAt: Date;
         rating: number;
-        agentId: string | null;
         userId: string;
+        agentId: string | null;
         propertyId: string | null;
         comment: string | null;
     }>;
@@ -31,8 +31,8 @@ export declare class ReviewsController {
         id: string;
         createdAt: Date;
         rating: number;
-        agentId: string | null;
         userId: string;
+        agentId: string | null;
         propertyId: string | null;
         comment: string | null;
     })[]>;
@@ -46,8 +46,8 @@ export declare class ReviewsController {
         id: string;
         createdAt: Date;
         rating: number;
-        agentId: string | null;
         userId: string;
+        agentId: string | null;
         propertyId: string | null;
         comment: string | null;
     })[]>;
@@ -61,8 +61,8 @@ export declare class ReviewsController {
         id: string;
         createdAt: Date;
         rating: number;
-        agentId: string | null;
         userId: string;
+        agentId: string | null;
         propertyId: string | null;
         comment: string | null;
     })[]>;

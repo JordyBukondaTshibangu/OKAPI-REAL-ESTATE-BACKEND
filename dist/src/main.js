@@ -25,7 +25,7 @@ async function bootstrap() {
         allowedHeaders: ["Content-Type", "Authorization"],
         credentials: true,
     });
-    await app.listen(process.env.PORT ?? 8080);
+    await app.listen(process.env.PORT ?? 8080, '0.0.0.0');
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

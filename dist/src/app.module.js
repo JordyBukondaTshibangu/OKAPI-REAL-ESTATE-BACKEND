@@ -21,7 +21,10 @@ const mail_module_1 = require("./mail/mail.module");
 const prisma_module_1 = require("./prisma/prisma.module");
 const properties_module_1 = require("./properties/properties.module");
 const reviews_module_1 = require("./reviews/reviews.module");
+const uploads_module_1 = require("./uploads/uploads.module");
 const users_module_1 = require("./users/users.module");
+const app_controller_1 = require("./app.controller");
+const app_service_1 = require("./app.service");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -41,8 +44,10 @@ exports.AppModule = AppModule = __decorate([
             alerts_module_1.AlertsModule,
             reviews_module_1.ReviewsModule,
             audit_logs_module_1.AuditLogsModule,
+            uploads_module_1.UploadsModule,
         ],
-        providers: [{ provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard }],
+        providers: [app_service_1.AppService, { provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard, }],
+        controllers: [app_controller_1.AppController],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

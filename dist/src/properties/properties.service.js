@@ -8,14 +8,26 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var PropertiesService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PropertiesService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
-let PropertiesService = class PropertiesService {
+const uploads_service_1 = require("../uploads/uploads.service");
+let PropertiesService = PropertiesService_1 = class PropertiesService {
     prisma;
-    constructor(prisma) {
+    uploads;
+    logger = new common_1.Logger(PropertiesService_1.name);
+    constructor(prisma, uploads) {
         this.prisma = prisma;
+        this.uploads = uploads;
+    }
+    toGalleryUrl(key) {
+        const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+        return `${base}/${key.replace(/^\//, "")}`;
+    }
+    withGalleryUrls(property) {
+        return { ...property, gallery: property.gallery.map((key) => this.toGalleryUrl(key)) };
     }
     async findAll(filter) {
         const { page, limit, search, agentId, agencyId, listingType, category, city, suburb, minPrice, maxPrice, bedrooms, bathrooms, minArea, maxArea, period, verified, premium, sortBy, sortOrder, } = filter;
@@ -72,7 +84,7 @@ let PropertiesService = class PropertiesService {
             this.prisma.property.count({ where }),
         ]);
         return {
-            data,
+            data: data.map((property) => this.withGalleryUrls(property)),
             meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
         };
     }
@@ -83,14 +95,28 @@ let PropertiesService = class PropertiesService {
         });
         if (!property)
             throw new common_1.NotFoundException("Property not found");
-        return property;
+        return this.withGalleryUrls(property);
     }
-    create(dto) {
-        return this.prisma.property.create({ data: dto });
+    async create(dto) {
+        const property = await this.prisma.property.create({ data: dto });
+        try {
+            const promotedKeys = await this.uploads.promoteKeys(property.gallery, property.id);
+            const updated = await this.prisma.property.update({
+                where: { id: property.id },
+                data: { gallery: promotedKeys },
+            });
+            return this.withGalleryUrls(updated);
+        }
+        catch (err) {
+            this.logger.error(`Failed to promote gallery images for property ${property.id} — ` +
+                `keys remain under tmp/ and will expire via the lifecycle rule unless promoted manually: ${property.gallery.join(", ")}`, err instanceof Error ? err.stack : err);
+            return this.withGalleryUrls(property);
+        }
     }
     async update(id, dto) {
         await this.findOne(id);
-        return this.prisma.property.update({ where: { id }, data: dto });
+        const property = await this.prisma.property.update({ where: { id }, data: dto });
+        return this.withGalleryUrls(property);
     }
     async remove(id) {
         await this.findOne(id);
@@ -99,8 +125,9 @@ let PropertiesService = class PropertiesService {
     }
 };
 exports.PropertiesService = PropertiesService;
-exports.PropertiesService = PropertiesService = __decorate([
+exports.PropertiesService = PropertiesService = PropertiesService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        uploads_service_1.UploadsService])
 ], PropertiesService);
 //# sourceMappingURL=properties.service.js.map

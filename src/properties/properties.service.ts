@@ -1,12 +1,28 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { UploadsService } from "../uploads/uploads.service";
 import { CreatePropertyDto } from "./dto/create-property.dto";
 import { PropertyFilterDto } from "./dto/property-filter.dto";
 import { UpdatePropertyDto } from "./dto/update-property.dto";
 
 @Injectable()
 export class PropertiesService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(PropertiesService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private uploads: UploadsService,
+  ) {}
+
+  /** Resolves a stored R2 object key (e.g. "tmp/<uuid>.jpg") to a public URL. */
+  private toGalleryUrl(key: string) {
+    const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+    return `${base}/${key.replace(/^\//, "")}`;
+  }
+
+  private withGalleryUrls<T extends { gallery: string[] }>(property: T): T {
+    return { ...property, gallery: property.gallery.map((key) => this.toGalleryUrl(key)) };
+  }
 
   async findAll(filter: PropertyFilterDto) {
     const {
@@ -87,7 +103,7 @@ export class PropertiesService {
       this.prisma.property.count({ where }),
     ]);
     return {
-      data,
+      data: data.map((property) => this.withGalleryUrls(property)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -98,16 +114,36 @@ export class PropertiesService {
       include: { agent: true, agency: true },
     });
     if (!property) throw new NotFoundException("Property not found");
-    return property;
+    return this.withGalleryUrls(property);
   }
 
-  create(dto: CreatePropertyDto) {
-    return this.prisma.property.create({ data: dto });
+  async create(dto: CreatePropertyDto) {
+    const property = await this.prisma.property.create({ data: dto });
+
+    // Gallery keys arrive as tmp/ uploads (see UploadsService.createPresignedUploads).
+    // Now that we have a property id, move them to a permanent properties/{id}/
+    // prefix so they survive the tmp/ lifecycle expiry rule.
+    try {
+      const promotedKeys = await this.uploads.promoteKeys(property.gallery, property.id);
+      const updated = await this.prisma.property.update({
+        where: { id: property.id },
+        data: { gallery: promotedKeys },
+      });
+      return this.withGalleryUrls(updated);
+    } catch (err) {
+      this.logger.error(
+        `Failed to promote gallery images for property ${property.id} — ` +
+          `keys remain under tmp/ and will expire via the lifecycle rule unless promoted manually: ${property.gallery.join(", ")}`,
+        err instanceof Error ? err.stack : err,
+      );
+      return this.withGalleryUrls(property);
+    }
   }
 
   async update(id: string, dto: UpdatePropertyDto) {
     await this.findOne(id);
-    return this.prisma.property.update({ where: { id }, data: dto });
+    const property = await this.prisma.property.update({ where: { id }, data: dto });
+    return this.withGalleryUrls(property);
   }
 
   async remove(id: string) {

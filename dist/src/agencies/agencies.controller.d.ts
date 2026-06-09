@@ -11,8 +11,9 @@ export declare class AgenciesController {
                 id: string;
                 createdAt: Date;
                 name: string;
-                closedDeals: number;
                 languages: string[];
+                closedDeals: number;
+                agencyId: string;
                 title: string;
                 specialization: string;
                 nationality: string;
@@ -22,15 +23,14 @@ export declare class AgenciesController {
                 ratingsCount: number;
                 responseMinutes: number;
                 brokerLicense: string;
-                forSaleCount: number;
-                forRentCount: number;
-                totalDealsValueUsd: number;
                 bio: string;
                 photo: string;
                 photoGradient: string;
                 agencyAccent: string;
                 agencyMonogram: string;
-                agencyId: string;
+                forSaleCount: number;
+                forRentCount: number;
+                totalDealsValueUsd: number;
             }[];
         } & {
             id: string;
@@ -45,13 +45,13 @@ export declare class AgenciesController {
             phone: string;
             website: string | null;
             founded: number;
-            agentCount: number;
-            listingCount: number;
-            closedDeals: number;
             specializations: string[];
             areasServed: string[];
             languages: string[];
             certifications: string[];
+            agentCount: number;
+            listingCount: number;
+            closedDeals: number;
         })[];
         meta: {
             total: number;
@@ -65,8 +65,9 @@ export declare class AgenciesController {
             id: string;
             createdAt: Date;
             name: string;
-            closedDeals: number;
             languages: string[];
+            closedDeals: number;
+            agencyId: string;
             title: string;
             specialization: string;
             nationality: string;
@@ -76,37 +77,36 @@ export declare class AgenciesController {
             ratingsCount: number;
             responseMinutes: number;
             brokerLicense: string;
-            forSaleCount: number;
-            forRentCount: number;
-            totalDealsValueUsd: number;
             bio: string;
             photo: string;
             photoGradient: string;
             agencyAccent: string;
             agencyMonogram: string;
-            agencyId: string;
+            forSaleCount: number;
+            forRentCount: number;
+            totalDealsValueUsd: number;
         }[];
         properties: {
             transaction: string | null;
             id: string;
             createdAt: Date;
             description: string | null;
+            agencyId: string;
             title: string;
             brokerLicense: string | null;
-            agencyId: string;
-            bedrooms: number;
-            period: string | null;
-            availableFrom: string | null;
             listingType: string;
             category: string;
+            city: string;
+            suburb: string;
+            agentId: string;
             price: number;
             currency: string;
+            period: string | null;
             subtitle: string;
+            bedrooms: number;
             bathrooms: number;
             areaSqm: number;
-            suburb: string;
             neighborhood: string;
-            city: string;
             verified: boolean;
             premium: boolean;
             isNew: boolean;
@@ -119,9 +119,9 @@ export declare class AgenciesController {
             zone: string | null;
             agentLicense: string | null;
             permitNumber: string | null;
+            availableFrom: string | null;
             averagePriceArea: number | null;
             averageSizeArea: number | null;
-            agentId: string;
         }[];
     } & {
         id: string;
@@ -136,13 +136,13 @@ export declare class AgenciesController {
         phone: string;
         website: string | null;
         founded: number;
-        agentCount: number;
-        listingCount: number;
-        closedDeals: number;
         specializations: string[];
         areasServed: string[];
         languages: string[];
         certifications: string[];
+        agentCount: number;
+        listingCount: number;
+        closedDeals: number;
     }>;
     create(dto: CreateAgencyDto): import("@prisma/client").Prisma.Prisma__AgencyClient<{
         id: string;
@@ -157,13 +157,13 @@ export declare class AgenciesController {
         phone: string;
         website: string | null;
         founded: number;
-        agentCount: number;
-        listingCount: number;
-        closedDeals: number;
         specializations: string[];
         areasServed: string[];
         languages: string[];
         certifications: string[];
+        agentCount: number;
+        listingCount: number;
+        closedDeals: number;
     }, never, import("@prisma/client/runtime/library").DefaultArgs>;
     update(id: string, dto: UpdateAgencyDto): Promise<{
         id: string;
@@ -178,13 +178,13 @@ export declare class AgenciesController {
         phone: string;
         website: string | null;
         founded: number;
-        agentCount: number;
-        listingCount: number;
-        closedDeals: number;
         specializations: string[];
         areasServed: string[];
         languages: string[];
         certifications: string[];
+        agentCount: number;
+        listingCount: number;
+        closedDeals: number;
     }>;
     remove(id: string): Promise<{
         message: string;

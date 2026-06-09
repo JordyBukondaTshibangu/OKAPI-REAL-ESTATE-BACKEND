@@ -24,6 +24,7 @@ let AdminAuthController = class AdminAuthController {
         this.adminAuthService = adminAuthService;
     }
     login(dto) {
+        console.log("Loagin in");
         return this.adminAuthService.login(dto);
     }
     logout() {
