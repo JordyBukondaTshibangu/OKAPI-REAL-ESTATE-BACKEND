@@ -19,6 +19,7 @@ const agents_service_1 = require("./agents.service");
 const create_agent_dto_1 = require("./dto/create-agent.dto");
 const filter_agent_dto_1 = require("./dto/filter-agent.dto");
 const update_agent_dto_1 = require("./dto/update-agent.dto");
+const update_photo_dto_1 = require("./dto/update-photo.dto");
 let AgentsController = class AgentsController {
     agentsService;
     constructor(agentsService) {
@@ -35,6 +36,9 @@ let AgentsController = class AgentsController {
     }
     update(id, dto) {
         return this.agentsService.update(id, dto);
+    }
+    updatePhoto(id, dto) {
+        return this.agentsService.updatePhoto(id, dto.key);
     }
     remove(id) {
         return this.agentsService.remove(id);
@@ -72,6 +76,15 @@ __decorate([
     __metadata("design:paramtypes", [String, update_agent_dto_1.UpdateAgentDto]),
     __metadata("design:returntype", void 0)
 ], AgentsController.prototype, "update", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_admin_guard_1.JwtAdminGuard),
+    (0, common_1.Patch)(":id/photo"),
+    __param(0, (0, common_1.Param)("id")),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, update_photo_dto_1.UpdatePhotoDto]),
+    __metadata("design:returntype", void 0)
+], AgentsController.prototype, "updatePhoto", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_admin_guard_1.JwtAdminGuard),
     (0, common_1.Delete)(":id"),

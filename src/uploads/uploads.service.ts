@@ -9,6 +9,11 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import { PresignFileDto } from "./dto/presign-upload.dto";
 
+export function toR2Url(key: string): string {
+  const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+  return `${base}/${key.replace(/^\//, "")}`;
+}
+
 const PRESIGN_TTL_SECONDS = 5 * 60;
 
 @Injectable()
@@ -45,6 +50,39 @@ export class UploadsService {
         });
 
         return { key, url };
+      }),
+    );
+  }
+
+  /** Copies one tmp/ object to a permanent key under the given prefix and deletes the original. */
+  async promoteToPrefix(tmpKey: string, prefix: string): Promise<string> {
+    const filename = tmpKey.split("/").pop();
+    const newKey = `${prefix}/${filename}`;
+
+    await this.client.send(
+      new CopyObjectCommand({
+        Bucket: this.bucket,
+        CopySource: `${this.bucket}/${tmpKey}`,
+        Key: newKey,
+      }),
+    );
+
+    await this.client.send(
+      new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: [{ Key: tmpKey }] },
+      }),
+    );
+
+    return newKey;
+  }
+
+  /** Deletes a single object from the bucket. Silently ignores missing keys. */
+  async deleteKey(key: string): Promise<void> {
+    await this.client.send(
+      new DeleteObjectsCommand({
+        Bucket: this.bucket,
+        Delete: { Objects: [{ Key: key }] },
       }),
     );
   }

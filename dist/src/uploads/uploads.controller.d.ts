@@ -1,4 +1,4 @@
-import { PresignUploadDto } from "./dto/presign-upload.dto";
+import { PresignFileDto, PresignUploadDto } from "./dto/presign-upload.dto";
 import { UploadsService } from "./uploads.service";
 export declare class UploadsController {
     private uploadsService;
@@ -7,4 +7,8 @@ export declare class UploadsController {
         key: string;
         url: string;
     }[]>;
+    presignAvatar(dto: PresignFileDto): Promise<{
+        key: string;
+        url: string;
+    }>;
 }

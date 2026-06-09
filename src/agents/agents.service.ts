@@ -1,12 +1,25 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
+import { toR2Url, UploadsService } from "../uploads/uploads.service";
 import { CreateAgentDto } from "./dto/create-agent.dto";
 import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
 
 @Injectable()
 export class AgentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private uploads: UploadsService,
+  ) {}
+
+  private resolvePhotoUrl(key: string): string {
+    if (key.startsWith("http")) return key;
+    return toR2Url(key);
+  }
+
+  private withPhotoUrl<T extends { photo: string }>(agent: T): T {
+    return { ...agent, photo: this.resolvePhotoUrl(agent.photo) };
+  }
 
   async findAll({
     page,
@@ -59,7 +72,7 @@ export class AgentsService {
       this.prisma.agent.count({ where }),
     ]);
     return {
-      data,
+      data: data.map((agent) => this.withPhotoUrl(agent)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -75,16 +88,38 @@ export class AgentsService {
       },
     });
     if (!agent) throw new NotFoundException("Agent not found");
-    return agent;
+    return this.withPhotoUrl(agent);
   }
 
-  create(dto: CreateAgentDto) {
-    return this.prisma.agent.create({ data: dto });
+  async create(dto: CreateAgentDto) {
+    const agent = await this.prisma.agent.create({ data: dto });
+    return this.withPhotoUrl(agent);
   }
 
   async update(id: string, dto: UpdateAgentDto) {
     await this.findOne(id);
-    return this.prisma.agent.update({ where: { id }, data: dto });
+    const agent = await this.prisma.agent.update({ where: { id }, data: dto });
+    return this.withPhotoUrl(agent);
+  }
+
+  async updatePhoto(id: string, tmpKey: string) {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id },
+      select: { photo: true },
+    });
+    if (!agent) throw new NotFoundException("Agent not found");
+
+    if (agent.photo && !agent.photo.startsWith("http")) {
+      await this.uploads.deleteKey(agent.photo).catch(() => {});
+    }
+
+    const newKey = await this.uploads.promoteToPrefix(tmpKey, `agents/${id}`);
+    const updated = await this.prisma.agent.update({
+      where: { id },
+      data: { photo: newKey },
+      include: { agency: true, areasOfExpertise: true, trackRecord: true },
+    });
+    return this.withPhotoUrl(updated);
   }
 
   async remove(id: string) {

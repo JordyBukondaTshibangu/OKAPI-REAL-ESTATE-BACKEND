@@ -15,6 +15,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.UploadsController = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_admin_guard_1 = require("../auth/guards/jwt-admin.guard");
+const jwt_user_guard_1 = require("../auth/guards/jwt-user.guard");
 const presign_upload_dto_1 = require("./dto/presign-upload.dto");
 const uploads_service_1 = require("./uploads.service");
 let UploadsController = class UploadsController {
@@ -25,17 +26,29 @@ let UploadsController = class UploadsController {
     presign(dto) {
         return this.uploadsService.createPresignedUploads(dto.files);
     }
+    async presignAvatar(dto) {
+        const [result] = await this.uploadsService.createPresignedUploads([dto]);
+        return result;
+    }
 };
 exports.UploadsController = UploadsController;
 __decorate([
+    (0, common_1.UseGuards)(jwt_admin_guard_1.JwtAdminGuard),
     (0, common_1.Post)("presign"),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [presign_upload_dto_1.PresignUploadDto]),
     __metadata("design:returntype", void 0)
 ], UploadsController.prototype, "presign", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_user_guard_1.JwtUserGuard),
+    (0, common_1.Post)("presign-avatar"),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [presign_upload_dto_1.PresignFileDto]),
+    __metadata("design:returntype", Promise)
+], UploadsController.prototype, "presignAvatar", null);
 exports.UploadsController = UploadsController = __decorate([
-    (0, common_1.UseGuards)(jwt_admin_guard_1.JwtAdminGuard),
     (0, common_1.Controller)("uploads"),
     __metadata("design:paramtypes", [uploads_service_1.UploadsService])
 ], UploadsController);

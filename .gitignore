@@ -49,3 +49,7 @@ prisma/*.db-journal
 
 # User uploads
 /uploads/
+
+CLAUDE.md
+./claude
+.claude

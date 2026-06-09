@@ -10,10 +10,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UploadsService = void 0;
+exports.toR2Url = toR2Url;
 const common_1 = require("@nestjs/common");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
 const crypto_1 = require("crypto");
+function toR2Url(key) {
+    const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+    return `${base}/${key.replace(/^\//, "")}`;
+}
 const PRESIGN_TTL_SECONDS = 5 * 60;
 let UploadsService = class UploadsService {
     client;
@@ -42,6 +47,26 @@ let UploadsService = class UploadsService {
                 expiresIn: PRESIGN_TTL_SECONDS,
             });
             return { key, url };
+        }));
+    }
+    async promoteToPrefix(tmpKey, prefix) {
+        const filename = tmpKey.split("/").pop();
+        const newKey = `${prefix}/${filename}`;
+        await this.client.send(new client_s3_1.CopyObjectCommand({
+            Bucket: this.bucket,
+            CopySource: `${this.bucket}/${tmpKey}`,
+            Key: newKey,
+        }));
+        await this.client.send(new client_s3_1.DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: [{ Key: tmpKey }] },
+        }));
+        return newKey;
+    }
+    async deleteKey(key) {
+        await this.client.send(new client_s3_1.DeleteObjectsCommand({
+            Bucket: this.bucket,
+            Delete: { Objects: [{ Key: key }] },
         }));
     }
     async promoteKeys(tmpKeys, propertyId) {

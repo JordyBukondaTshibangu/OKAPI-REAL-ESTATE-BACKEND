@@ -12,10 +12,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AgentsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
+const uploads_service_1 = require("../uploads/uploads.service");
 let AgentsService = class AgentsService {
     prisma;
-    constructor(prisma) {
+    uploads;
+    constructor(prisma, uploads) {
         this.prisma = prisma;
+        this.uploads = uploads;
+    }
+    resolvePhotoUrl(key) {
+        if (key.startsWith("http"))
+            return key;
+        return (0, uploads_service_1.toR2Url)(key);
+    }
+    withPhotoUrl(agent) {
+        return { ...agent, photo: this.resolvePhotoUrl(agent.photo) };
     }
     async findAll({ page, limit, search, name, title, specialization, language, nationality, sortBy, sortOrder, }) {
         const skip = (page - 1) * limit;
@@ -56,7 +67,7 @@ let AgentsService = class AgentsService {
             this.prisma.agent.count({ where }),
         ]);
         return {
-            data,
+            data: data.map((agent) => this.withPhotoUrl(agent)),
             meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
         };
     }
@@ -72,14 +83,34 @@ let AgentsService = class AgentsService {
         });
         if (!agent)
             throw new common_1.NotFoundException("Agent not found");
-        return agent;
+        return this.withPhotoUrl(agent);
     }
-    create(dto) {
-        return this.prisma.agent.create({ data: dto });
+    async create(dto) {
+        const agent = await this.prisma.agent.create({ data: dto });
+        return this.withPhotoUrl(agent);
     }
     async update(id, dto) {
         await this.findOne(id);
-        return this.prisma.agent.update({ where: { id }, data: dto });
+        const agent = await this.prisma.agent.update({ where: { id }, data: dto });
+        return this.withPhotoUrl(agent);
+    }
+    async updatePhoto(id, tmpKey) {
+        const agent = await this.prisma.agent.findUnique({
+            where: { id },
+            select: { photo: true },
+        });
+        if (!agent)
+            throw new common_1.NotFoundException("Agent not found");
+        if (agent.photo && !agent.photo.startsWith("http")) {
+            await this.uploads.deleteKey(agent.photo).catch(() => { });
+        }
+        const newKey = await this.uploads.promoteToPrefix(tmpKey, `agents/${id}`);
+        const updated = await this.prisma.agent.update({
+            where: { id },
+            data: { photo: newKey },
+            include: { agency: true, areasOfExpertise: true, trackRecord: true },
+        });
+        return this.withPhotoUrl(updated);
     }
     async remove(id) {
         await this.findOne(id);
@@ -90,6 +121,7 @@ let AgentsService = class AgentsService {
 exports.AgentsService = AgentsService;
 exports.AgentsService = AgentsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        uploads_service_1.UploadsService])
 ], AgentsService);
 //# sourceMappingURL=agents.service.js.map

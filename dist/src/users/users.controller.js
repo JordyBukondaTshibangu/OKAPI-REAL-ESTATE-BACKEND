@@ -14,26 +14,11 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersController = void 0;
 const common_1 = require("@nestjs/common");
-const platform_express_1 = require("@nestjs/platform-express");
 const swagger_1 = require("@nestjs/swagger");
-const multer_1 = require("multer");
-const path_1 = require("path");
 const jwt_user_guard_1 = require("../auth/guards/jwt-user.guard");
+const update_avatar_dto_1 = require("./dto/update-avatar.dto");
 const update_user_dto_1 = require("./dto/update-user.dto");
 const users_service_1 = require("./users.service");
-const avatarStorage = (0, multer_1.diskStorage)({
-    destination: "./uploads/avatars",
-    filename: (_req, file, cb) => {
-        const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
-        cb(null, `${unique}${(0, path_1.extname)(file.originalname)}`);
-    },
-});
-const imageFileFilter = (_req, file, cb) => {
-    if (!file.mimetype.match(/^image\/(jpg|jpeg|png|webp)$/)) {
-        return cb(new common_1.BadRequestException("Only jpg, jpeg, png, and webp files are allowed"), false);
-    }
-    cb(null, true);
-};
 let UsersController = class UsersController {
     usersService;
     constructor(usersService) {
@@ -45,11 +30,8 @@ let UsersController = class UsersController {
     updateMe(req, dto) {
         return this.usersService.updateMe(req.user.userId, dto);
     }
-    uploadAvatar(req, file) {
-        if (!file)
-            throw new common_1.BadRequestException("No file provided");
-        const relativePath = `uploads/avatars/${file.filename}`;
-        return this.usersService.updateAvatar(req.user.userId, relativePath);
+    updateAvatar(req, dto) {
+        return this.usersService.updateAvatar(req.user.userId, dto.key);
     }
     removeAvatar(req) {
         return this.usersService.removeAvatar(req.user.userId);
@@ -77,26 +59,14 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "updateMe", null);
 __decorate([
-    (0, swagger_1.ApiOperation)({ summary: "Upload profile picture" }),
-    (0, swagger_1.ApiConsumes)("multipart/form-data"),
-    (0, swagger_1.ApiBody)({
-        schema: {
-            type: "object",
-            properties: { file: { type: "string", format: "binary" } },
-        },
-    }),
-    (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)("file", {
-        storage: avatarStorage,
-        fileFilter: imageFileFilter,
-        limits: { fileSize: 5 * 1024 * 1024 },
-    })),
+    (0, swagger_1.ApiOperation)({ summary: "Set profile picture from a presigned R2 upload (use POST /uploads/presign-avatar first)" }),
     (0, common_1.Patch)("me/avatar"),
     __param(0, (0, common_1.Request)()),
-    __param(1, (0, common_1.UploadedFile)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object, update_avatar_dto_1.UpdateAvatarDto]),
     __metadata("design:returntype", void 0)
-], UsersController.prototype, "uploadAvatar", null);
+], UsersController.prototype, "updateAvatar", null);
 __decorate([
     (0, swagger_1.ApiOperation)({ summary: "Remove profile picture" }),
     (0, common_1.Delete)("me/avatar"),

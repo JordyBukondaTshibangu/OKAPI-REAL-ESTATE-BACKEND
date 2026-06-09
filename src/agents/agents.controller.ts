@@ -14,6 +14,7 @@ import { AgentsService } from "./agents.service";
 import { CreateAgentDto } from "./dto/create-agent.dto";
 import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
+import { UpdatePhotoDto } from "./dto/update-photo.dto";
 
 @Controller("agents")
 export class AgentsController {
@@ -39,6 +40,12 @@ export class AgentsController {
   @Patch(":id")
   update(@Param("id") id: string, @Body() dto: UpdateAgentDto) {
     return this.agentsService.update(id, dto);
+  }
+
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/photo")
+  updatePhoto(@Param("id") id: string, @Body() dto: UpdatePhotoDto) {
+    return this.agentsService.updatePhoto(id, dto.key);
   }
 
   @UseGuards(JwtAdminGuard)
