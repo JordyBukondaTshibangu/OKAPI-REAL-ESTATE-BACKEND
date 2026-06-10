@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -27,6 +29,18 @@ export class PropertiesController {
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.propertiesService.findOne(id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(":id/view")
+  recordView(@Param("id") id: string) {
+    return this.propertiesService.recordView(id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(":id/share")
+  recordShare(@Param("id") id: string) {
+    return this.propertiesService.recordShare(id);
   }
 
   @UseGuards(JwtAdminGuard)

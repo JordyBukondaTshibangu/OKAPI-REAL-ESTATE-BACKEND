@@ -24,6 +24,21 @@ export class PropertiesService {
     return { ...property, gallery: property.gallery.map((key) => this.toGalleryUrl(key)) };
   }
 
+  /** Reshapes raw view/share counters and the favorites relation into a `performance` summary. */
+  private withPerformance<
+    T extends { viewCount: number; shareCount: number; _count?: { favorites: number } },
+  >(property: T) {
+    const { viewCount, shareCount, _count, ...rest } = property;
+    return {
+      ...rest,
+      performance: {
+        viewed: viewCount,
+        shared: shareCount,
+        saved: _count?.favorites ?? 0,
+      },
+    };
+  }
+
   async findAll(filter: PropertyFilterDto) {
     const {
       page,
@@ -98,12 +113,12 @@ export class PropertiesService {
         skip,
         take: limit,
         orderBy,
-        include: { agent: true, agency: true },
+        include: { agent: true, agency: true, _count: { select: { favorites: true } } },
       }),
       this.prisma.property.count({ where }),
     ]);
     return {
-      data: data.map((property) => this.withGalleryUrls(property)),
+      data: data.map((property) => this.withPerformance(this.withGalleryUrls(property))),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -111,10 +126,10 @@ export class PropertiesService {
   async findOne(id: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
-      include: { agent: true, agency: true },
+      include: { agent: true, agency: true, _count: { select: { favorites: true } } },
     });
     if (!property) throw new NotFoundException("Property not found");
-    return this.withGalleryUrls(property);
+    return this.withPerformance(this.withGalleryUrls(property));
   }
 
   async create(dto: CreatePropertyDto) {
@@ -129,21 +144,47 @@ export class PropertiesService {
         where: { id: property.id },
         data: { gallery: promotedKeys },
       });
-      return this.withGalleryUrls(updated);
+      return this.withPerformance(this.withGalleryUrls(updated));
     } catch (err) {
       this.logger.error(
         `Failed to promote gallery images for property ${property.id} — ` +
           `keys remain under tmp/ and will expire via the lifecycle rule unless promoted manually: ${property.gallery.join(", ")}`,
         err instanceof Error ? err.stack : err,
       );
-      return this.withGalleryUrls(property);
+      return this.withPerformance(this.withGalleryUrls(property));
     }
   }
 
   async update(id: string, dto: UpdatePropertyDto) {
     await this.findOne(id);
-    const property = await this.prisma.property.update({ where: { id }, data: dto });
-    return this.withGalleryUrls(property);
+    const property = await this.prisma.property.update({
+      where: { id },
+      data: dto,
+      include: { _count: { select: { favorites: true } } },
+    });
+    return this.withPerformance(this.withGalleryUrls(property));
+  }
+
+  /** Records a property view (e.g. when a visitor opens the property detail page). */
+  async recordView(id: string) {
+    await this.findOne(id);
+    const property = await this.prisma.property.update({
+      where: { id },
+      data: { viewCount: { increment: 1 } },
+      include: { _count: { select: { favorites: true } } },
+    });
+    return this.withPerformance(property).performance;
+  }
+
+  /** Records a property share (e.g. when a visitor uses the share button). */
+  async recordShare(id: string) {
+    await this.findOne(id);
+    const property = await this.prisma.property.update({
+      where: { id },
+      data: { shareCount: { increment: 1 } },
+      include: { _count: { select: { favorites: true } } },
+    });
+    return this.withPerformance(property).performance;
   }
 
   async remove(id: string) {

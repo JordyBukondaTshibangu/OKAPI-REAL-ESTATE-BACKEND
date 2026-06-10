@@ -30,6 +30,12 @@ let PropertiesController = class PropertiesController {
     findOne(id) {
         return this.propertiesService.findOne(id);
     }
+    recordView(id) {
+        return this.propertiesService.recordView(id);
+    }
+    recordShare(id) {
+        return this.propertiesService.recordShare(id);
+    }
     create(dto) {
         return this.propertiesService.create(dto);
     }
@@ -55,6 +61,22 @@ __decorate([
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], PropertiesController.prototype, "findOne", null);
+__decorate([
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.Post)(":id/view"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], PropertiesController.prototype, "recordView", null);
+__decorate([
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    (0, common_1.Post)(":id/share"),
+    __param(0, (0, common_1.Param)("id")),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], PropertiesController.prototype, "recordShare", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_admin_guard_1.JwtAdminGuard),
     (0, common_1.Post)(),

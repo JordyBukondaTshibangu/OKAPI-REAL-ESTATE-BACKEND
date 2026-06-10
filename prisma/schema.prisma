@@ -162,6 +162,9 @@ model Property {
   averagePriceArea Float?
   averageSizeArea  Float?
 
+  viewCount       Int      @default(0)
+  shareCount      Int      @default(0)
+
   createdAt       DateTime @default(now())
 
   favorites  Favorite[]
