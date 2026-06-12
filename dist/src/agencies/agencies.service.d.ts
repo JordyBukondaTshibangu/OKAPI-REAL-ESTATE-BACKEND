@@ -23,14 +23,14 @@ export declare class AgenciesService {
                 ratingsCount: number;
                 responseMinutes: number;
                 brokerLicense: string;
+                forSaleCount: number;
+                forRentCount: number;
+                totalDealsValueUsd: number;
                 bio: string;
                 photo: string;
                 photoGradient: string;
                 agencyAccent: string;
                 agencyMonogram: string;
-                forSaleCount: number;
-                forRentCount: number;
-                totalDealsValueUsd: number;
             }[];
         } & {
             id: string;
@@ -77,14 +77,14 @@ export declare class AgenciesService {
             ratingsCount: number;
             responseMinutes: number;
             brokerLicense: string;
+            forSaleCount: number;
+            forRentCount: number;
+            totalDealsValueUsd: number;
             bio: string;
             photo: string;
             photoGradient: string;
             agencyAccent: string;
             agencyMonogram: string;
-            forSaleCount: number;
-            forRentCount: number;
-            totalDealsValueUsd: number;
         }[];
         properties: {
             transaction: string | null;
@@ -94,11 +94,9 @@ export declare class AgenciesService {
             agencyId: string;
             title: string;
             brokerLicense: string | null;
+            agentId: string;
             listingType: string;
             category: string;
-            city: string;
-            suburb: string;
-            agentId: string;
             price: number;
             currency: string;
             period: string | null;
@@ -106,7 +104,9 @@ export declare class AgenciesService {
             bedrooms: number;
             bathrooms: number;
             areaSqm: number;
+            suburb: string;
             neighborhood: string;
+            city: string;
             verified: boolean;
             premium: boolean;
             isNew: boolean;
@@ -122,6 +122,8 @@ export declare class AgenciesService {
             availableFrom: string | null;
             averagePriceArea: number | null;
             averageSizeArea: number | null;
+            viewCount: number;
+            shareCount: number;
         }[];
     } & {
         id: string;

@@ -12,9 +12,9 @@ export declare class EnquiriesController {
     } & {
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         propertyId: string;
-        message: string;
         status: string;
     }>;
     getAll(req: any): Promise<({
@@ -26,9 +26,9 @@ export declare class EnquiriesController {
     } & {
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         propertyId: string;
-        message: string;
         status: string;
     })[]>;
     getForProperty(propertyId: string): Promise<({
@@ -41,9 +41,9 @@ export declare class EnquiriesController {
     } & {
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         propertyId: string;
-        message: string;
         status: string;
     })[]>;
     delete(req: any, id: string): Promise<{

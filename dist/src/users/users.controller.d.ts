@@ -7,38 +7,38 @@ export declare class UsersController {
     getMe(req: any): Promise<{
         id: string;
         email: string;
+        createdAt: Date;
         firstName: string;
         lastName: string;
         phoneNumber: string;
         profileImage: string | null;
-        createdAt: Date;
     }>;
     updateMe(req: any, dto: UpdateUserDto): Promise<{
         id: string;
         email: string;
+        createdAt: Date;
         firstName: string;
         lastName: string;
         phoneNumber: string;
         profileImage: string | null;
-        createdAt: Date;
     }>;
     updateAvatar(req: any, dto: UpdateAvatarDto): Promise<{
         id: string;
         email: string;
+        createdAt: Date;
         firstName: string;
         lastName: string;
         phoneNumber: string;
         profileImage: string | null;
-        createdAt: Date;
     }>;
     removeAvatar(req: any): Promise<{
         id: string;
         email: string;
+        createdAt: Date;
         firstName: string;
         lastName: string;
         phoneNumber: string;
         profileImage: string | null;
-        createdAt: Date;
     }>;
     deleteMe(req: any): Promise<{
         message: string;

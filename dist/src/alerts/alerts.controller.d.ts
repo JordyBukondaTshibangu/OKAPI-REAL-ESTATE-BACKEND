@@ -10,10 +10,10 @@ export declare class AlertsController {
         name: string;
         listingType: string | null;
         category: string | null;
+        suburb: string | null;
+        city: string | null;
         minPrice: number | null;
         maxPrice: number | null;
-        city: string | null;
-        suburb: string | null;
         minBedrooms: number | null;
         maxBedrooms: number | null;
         active: boolean;
@@ -25,10 +25,10 @@ export declare class AlertsController {
         name: string;
         listingType: string | null;
         category: string | null;
+        suburb: string | null;
+        city: string | null;
         minPrice: number | null;
         maxPrice: number | null;
-        city: string | null;
-        suburb: string | null;
         minBedrooms: number | null;
         maxBedrooms: number | null;
         active: boolean;
@@ -42,11 +42,9 @@ export declare class AlertsController {
         agencyId: string;
         title: string;
         brokerLicense: string | null;
+        agentId: string;
         listingType: string;
         category: string;
-        city: string;
-        suburb: string;
-        agentId: string;
         price: number;
         currency: string;
         period: string | null;
@@ -54,7 +52,9 @@ export declare class AlertsController {
         bedrooms: number;
         bathrooms: number;
         areaSqm: number;
+        suburb: string;
         neighborhood: string;
+        city: string;
         verified: boolean;
         premium: boolean;
         isNew: boolean;
@@ -70,6 +70,8 @@ export declare class AlertsController {
         availableFrom: string | null;
         averagePriceArea: number | null;
         averageSizeArea: number | null;
+        viewCount: number;
+        shareCount: number;
     }[]>;
     update(req: any, id: string, dto: UpdateAlertDto): Promise<{
         id: string;
@@ -77,10 +79,10 @@ export declare class AlertsController {
         name: string;
         listingType: string | null;
         category: string | null;
+        suburb: string | null;
+        city: string | null;
         minPrice: number | null;
         maxPrice: number | null;
-        city: string | null;
-        suburb: string | null;
         minBedrooms: number | null;
         maxBedrooms: number | null;
         active: boolean;

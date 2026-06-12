@@ -12,11 +12,9 @@ export declare class FavoritesController {
             agencyId: string;
             title: string;
             brokerLicense: string | null;
+            agentId: string;
             listingType: string;
             category: string;
-            city: string;
-            suburb: string;
-            agentId: string;
             price: number;
             currency: string;
             period: string | null;
@@ -24,7 +22,9 @@ export declare class FavoritesController {
             bedrooms: number;
             bathrooms: number;
             areaSqm: number;
+            suburb: string;
             neighborhood: string;
+            city: string;
             verified: boolean;
             premium: boolean;
             isNew: boolean;
@@ -40,6 +40,8 @@ export declare class FavoritesController {
             availableFrom: string | null;
             averagePriceArea: number | null;
             averageSizeArea: number | null;
+            viewCount: number;
+            shareCount: number;
         };
     } & {
         id: string;
@@ -59,11 +61,9 @@ export declare class FavoritesController {
             agencyId: string;
             title: string;
             brokerLicense: string | null;
+            agentId: string;
             listingType: string;
             category: string;
-            city: string;
-            suburb: string;
-            agentId: string;
             price: number;
             currency: string;
             period: string | null;
@@ -71,7 +71,9 @@ export declare class FavoritesController {
             bedrooms: number;
             bathrooms: number;
             areaSqm: number;
+            suburb: string;
             neighborhood: string;
+            city: string;
             verified: boolean;
             premium: boolean;
             isNew: boolean;
@@ -87,6 +89,8 @@ export declare class FavoritesController {
             availableFrom: string | null;
             averagePriceArea: number | null;
             averageSizeArea: number | null;
+            viewCount: number;
+            shareCount: number;
         };
     } & {
         id: string;

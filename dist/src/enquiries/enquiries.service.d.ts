@@ -12,9 +12,9 @@ export declare class EnquiriesService {
     } & {
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         propertyId: string;
-        message: string;
         status: string;
     }>;
     getMyEnquiries(userId: string): Promise<({
@@ -26,9 +26,9 @@ export declare class EnquiriesService {
     } & {
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         propertyId: string;
-        message: string;
         status: string;
     })[]>;
     getEnquiriesForProperty(propertyId: string): Promise<({
@@ -41,9 +41,9 @@ export declare class EnquiriesService {
     } & {
         id: string;
         createdAt: Date;
+        message: string;
         userId: string;
         propertyId: string;
-        message: string;
         status: string;
     })[]>;
     delete(userId: string, id: string): Promise<{
