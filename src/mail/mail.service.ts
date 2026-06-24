@@ -1,5 +1,5 @@
-import { Injectable, Logger } from "@nestjs/common";
-import * as nodemailer from "nodemailer";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { Resend } from "resend";
 
 interface AlertProperty {
   id: string;
@@ -18,10 +18,10 @@ interface AlertProperty {
 }
 
 @Injectable()
-export class MailService {
-  private transporter: nodemailer.Transporter;
+export class MailService implements OnModuleInit {
+  private readonly resend: Resend;
   private readonly logger = new Logger(MailService.name);
-  private readonly from = `"Okapi Real Estate" <${process.env.MAIL_USER}>`;
+  private readonly from = `Okapi Real Estate <${process.env.MAIL_FROM ?? "contact@okapi-real-estate.com"}>`;
   private readonly baseUrl = process.env.FRONTEND_URL ?? "http://localhost:3001";
   private readonly logoUrl = process.env.MAIL_LOGO_URL ?? "";
 
@@ -54,20 +54,22 @@ export class MailService {
   }
 
   constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.MAIL_HOST ?? "smtp.gmail.com",
-      port: Number(process.env.MAIL_PORT ?? 587),
-      secure: false,
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS,
-      },
-    });
+    this.resend = new Resend(process.env.RESEND_API_KEY);
+  }
+
+  async onModuleInit() {
+    if (!process.env.RESEND_API_KEY) {
+      this.logger.error("❌ RESEND_API_KEY is not set — emails will not be sent");
+    } else {
+      this.logger.log("✅ Resend mail client initialized");
+    }
   }
 
   private async send(to: string, subject: string, html: string) {
     try {
-      await this.transporter.sendMail({ from: this.from, to, subject, html });
+      const { error } = await this.resend.emails.send({ from: this.from, to, subject, html });
+      if (error) throw error;
+      this.logger.log(`📧 Email sent: "${subject}" → ${to}`);
     } catch (err) {
       this.logger.error(`Failed to send "${subject}" to ${to}`, err);
     }
