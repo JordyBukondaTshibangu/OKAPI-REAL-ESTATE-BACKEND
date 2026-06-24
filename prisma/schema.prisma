@@ -8,6 +8,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AgentVerificationTier {
+  NON_VERIFIE
+  VERIFIE
+  PARTENAIRE_CONFIANCE
+}
+
+enum DocumentReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReferenceType {
+  AGENT
+  AGENCY
+  COMMISSIONNAIRE
+}
+
+enum ReferenceStatus {
+  PENDING
+  CONFIRMED
+  REVOKED
+  FLAGGED
+}
+
+enum AgencyVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Admin {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -33,6 +64,7 @@ model User {
   enquiries  Enquiry[]
   alerts     Alert[]
   reviews    Review[]
+  complaintsFiled AgentComplaint[]
 }
 
 model Agency {
@@ -55,37 +87,71 @@ model Agency {
   languages       String[]
   certifications  String[]
 
+  // --- Agency verification gate ---
+  // Heavier than the individual agent gate: an agency vouches for many
+  // agents at once, so it needs business proof + at least one already
+  // verified agent before it can fast-track its own staff.
+  verificationStatus AgencyVerificationStatus @default(PENDING)
+  businessProofUrl   String?
+  approvedAt         DateTime?
+  standingFlagged    Boolean                  @default(false)
+
   createdAt   DateTime @default(now())
 
   agents     Agent[]
   properties Property[]
+  vouchesGiven AgentReference[]
 }
 
 model Agent {
   id               String  @id @default(uuid())
-  agencyId         String
-  agency           Agency  @relation(fields: [agencyId], references: [id])
+  // Independent agents (not yet affiliated with an agency) are allowed —
+  // agency affiliation is optional, matching the tiered trust model where
+  // agency approval is a separate, heavier gate above individual agents.
+  agencyId         String?
+  agency           Agency? @relation(fields: [agencyId], references: [id], onDelete: SetNull)
 
   name             String
-  title            String
-  specialization   String
-  nationality      String
-  languages        String[]
-  yearsExperience  Int
-  experienceSince  Int
-  rating           Float
-  ratingsCount     Int
-  responseMinutes  Int
-  brokerLicense    String
+  title            String  @default("Agent")
+  specialization   String  @default("")
+  nationality      String  @default("")
+  languages        String[] @default([])
+  yearsExperience  Int     @default(0)
+  experienceSince  Int     @default(0)
+  rating           Float   @default(0)
+  ratingsCount     Int     @default(0)
+  responseMinutes  Int     @default(0)
+  // Not every agent has a formal license (e.g. an unlicensed commissionnaire),
+  // so this is no longer mandatory at signup time.
+  brokerLicense    String?
   forSaleCount     Int     @default(0)
   forRentCount     Int     @default(0)
   closedDeals      Int     @default(0)
   totalDealsValueUsd Float @default(0)
-  bio              String
-  photo            String
-  photoGradient    String
-  agencyAccent     String
-  agencyMonogram   String
+  bio              String  @default("")
+  photo            String  @default("")
+  photoGradient    String  @default("from-slate-400 to-slate-600")
+  agencyAccent     String  @default("")
+  agencyMonogram   String  @default("")
+
+  // --- Self-signup auth ---
+  email            String?   @unique
+  passwordHash     String?
+  phoneNumber      String?   @unique
+  whatsappNumber   String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  // --- Tiered trust / verification ---
+  verificationTier    AgentVerificationTier @default(NON_VERIFIE)
+  idDocumentUrl        String?
+  idDocumentStatus     DocumentReviewStatus  @default(PENDING)
+  firstListingChecked  Boolean               @default(false)
+  verifiedAt           DateTime?
+  partnerSince         DateTime?
+  lastTierCheckedAt    DateTime?
+  complaintCount       Int                   @default(0)
+  flagged              Boolean               @default(false)
 
   createdAt        DateTime @default(now())
 
@@ -93,6 +159,55 @@ model Agent {
   areasOfExpertise AreaOfExpertise[]
   trackRecord      TrackRecord[]
   reviews          Review[]
+
+  referencesReceived AgentReference[] @relation("ReferenceReceiver")
+  referencesGiven    AgentReference[] @relation("ReferenceGiver")
+  complaints         AgentComplaint[]
+}
+
+// A "vouch": records who is endorsing a given agent during the
+// Non-vérifié -> Vérifié step (a verified agent, an approved agency, or a
+// named commissionnaire outside the platform). Kept as an internal scoring
+// signal — not exposed in public API responses.
+model AgentReference {
+  id   String        @id @default(uuid())
+  type ReferenceType
+
+  agentId String
+  agent   Agent  @relation("ReferenceReceiver", fields: [agentId], references: [id], onDelete: Cascade)
+
+  voucherAgentId  String?
+  voucherAgent    Agent?  @relation("ReferenceGiver", fields: [voucherAgentId], references: [id], onDelete: SetNull)
+  voucherAgencyId String?
+  voucherAgency   Agency? @relation(fields: [voucherAgencyId], references: [id], onDelete: SetNull)
+  // Fallback for references that don't map to a platform account yet,
+  // e.g. an external commissionnaire vouching by name/phone.
+  voucherName    String?
+  voucherContact String?
+
+  status ReferenceStatus @default(PENDING)
+  note   String?
+
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// A complaint filed by a site visitor against an agent. Crossing the
+// threshold flags the agent (and their agency) for re-review — this is
+// the only ongoing manual workload once an agent reaches Tier 2+.
+model AgentComplaint {
+  id      String @id @default(uuid())
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  reporterUserId String?
+  reporterUser   User?   @relation(fields: [reporterUserId], references: [id], onDelete: SetNull)
+
+  reason  String
+  details String?
+  status  String  @default("open")
+
+  createdAt DateTime @default(now())
 }
 
 model AreaOfExpertise {

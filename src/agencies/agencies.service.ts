@@ -62,7 +62,12 @@ export class AgenciesService {
   }
 
   create(dto: CreateAgencyDto) {
-    return this.prisma.agency.create({ data: dto });
+    // Agencies created directly by Admin are pre-vetted out of band, same
+    // reasoning as Agent.create() — they don't need to go through the
+    // self-service business-proof gate built for agency self-registration.
+    return this.prisma.agency.create({
+      data: { ...dto, verificationStatus: "APPROVED", approvedAt: new Date() },
+    });
   }
 
   async update(id: string, dto: UpdateAgencyDto) {

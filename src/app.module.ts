@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AgenciesModule } from "./agencies/agencies.module";
+import { AgentVerificationModule } from "./agent-verification/agent-verification.module";
 import { AgentsModule } from "./agents/agents.module";
 import { AlertsModule } from "./alerts/alerts.module";
 import { AuditLogsModule } from "./audit-logs/audit-logs.module";
@@ -26,6 +27,7 @@ import { AppService } from './app.service';
     UsersModule,
     AgenciesModule,
     AgentsModule,
+    AgentVerificationModule,
     PropertiesModule,
     FavoritesModule,
     EnquiriesModule,
