@@ -97,7 +97,7 @@ export class AgentAuthService {
       data: { resetToken: token, resetTokenExpiry: expiry },
     });
 
-    await this.mail.sendPasswordReset(agent.email!, token);
+    await this.mail.sendPasswordReset(agent.email!, token, agent.name.split(" ")[0]);
     return { message: "If that email exists, a reset link was sent" };
   }
 

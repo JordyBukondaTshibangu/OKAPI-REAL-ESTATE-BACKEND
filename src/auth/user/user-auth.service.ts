@@ -37,6 +37,7 @@ export class UserAuthService {
         passwordHash,
       },
     });
+    void this.mail.sendWelcome(user.email, user.firstName);
     return { access_token: this.jwt.sign({ sub: user.id, role: "user" }) };
   }
 
@@ -65,7 +66,7 @@ export class UserAuthService {
       data: { resetToken: token, resetTokenExpiry: expiry },
     });
 
-    await this.mail.sendPasswordReset(user.email, token);
+    await this.mail.sendPasswordReset(user.email, token, user.firstName);
     return { message: "If that email exists, a reset link was sent" };
   }
 

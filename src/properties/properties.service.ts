@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { UploadsService } from "../uploads/uploads.service";
 import { CreatePropertyDto } from "./dto/create-property.dto";
@@ -12,6 +13,7 @@ export class PropertiesService {
   constructor(
     private prisma: PrismaService,
     private uploads: UploadsService,
+    private mail: MailService,
   ) {}
 
   /** Resolves a stored R2 object key (e.g. "tmp/<uuid>.jpg") to a public URL. */
@@ -138,20 +140,115 @@ export class PropertiesService {
     // Gallery keys arrive as tmp/ uploads (see UploadsService.createPresignedUploads).
     // Now that we have a property id, move them to a permanent properties/{id}/
     // prefix so they survive the tmp/ lifecycle expiry rule.
+    let promoted = property;
     try {
       const promotedKeys = await this.uploads.promoteKeys(property.gallery, property.id);
-      const updated = await this.prisma.property.update({
+      promoted = await this.prisma.property.update({
         where: { id: property.id },
         data: { gallery: promotedKeys },
       });
-      return this.withPerformance(this.withGalleryUrls(updated));
     } catch (err) {
       this.logger.error(
         `Failed to promote gallery images for property ${property.id} — ` +
           `keys remain under tmp/ and will expire via the lifecycle rule unless promoted manually: ${property.gallery.join(", ")}`,
         err instanceof Error ? err.stack : err,
       );
-      return this.withPerformance(this.withGalleryUrls(property));
+    }
+
+    // Fire property alert notifications with the promoted (final) gallery URLs.
+    void this.notifyMatchingAlerts(promoted);
+
+    return this.withPerformance(this.withGalleryUrls(promoted));
+  }
+
+  /**
+   * Finds all active alerts whose criteria match the newly created property,
+   * groups them by user, and sends one alert email per user.
+   */
+  private async notifyMatchingAlerts(property: {
+    id: string;
+    title: string;
+    price: number;
+    city: string;
+    suburb?: string | null;
+    listingType: string;
+    category: string;
+    bedrooms?: number | null;
+    bathrooms?: number | null;
+    verified: boolean;
+    gallery: string[];
+    agentId: string;
+    period?: string | null;
+  }) {
+    try {
+      // Fetch agent's WhatsApp number for the contact button in the email.
+      const agent = await this.prisma.agent.findUnique({
+        where: { id: property.agentId },
+        select: { whatsappNumber: true },
+      });
+
+      // Resolve raw gallery keys to public URLs.
+      const galleryUrls = property.gallery.map((key) => this.toGalleryUrl(key));
+
+      const propertySnapshot = {
+        id: property.id,
+        title: property.title,
+        price: property.price,
+        city: property.city,
+        suburb: property.suburb,
+        listingType: property.listingType,
+        category: property.category,
+        bedrooms: property.bedrooms,
+        bathrooms: property.bathrooms,
+        verified: property.verified,
+        gallery: galleryUrls,
+        whatsappNumber: agent?.whatsappNumber ?? null,
+        period: property.period,
+      };
+
+      const matchingAlerts = await this.prisma.alert.findMany({
+        where: {
+          active: true,
+          ...(property.listingType && { OR: [{ listingType: null }, { listingType: property.listingType }] }),
+          ...(property.category && { OR: [{ category: null }, { category: property.category }] }),
+          ...(property.city && { OR: [{ city: null }, { city: { contains: property.city, mode: "insensitive" as const } }] }),
+          ...(property.suburb && { OR: [{ suburb: null }, { suburb: { contains: property.suburb, mode: "insensitive" as const } }] }),
+          OR: [{ minPrice: null }, { minPrice: { lte: property.price } }],
+          AND: [
+            { OR: [{ maxPrice: null }, { maxPrice: { gte: property.price } }] },
+            ...(property.bedrooms != null
+              ? [
+                  { OR: [{ minBedrooms: null }, { minBedrooms: { lte: property.bedrooms! } }] },
+                  { OR: [{ maxBedrooms: null }, { maxBedrooms: { gte: property.bedrooms! } }] },
+                ]
+              : []),
+          ],
+        },
+        include: { user: { select: { email: true, firstName: true } } },
+      });
+
+      if (!matchingAlerts.length) return;
+
+      for (const alert of matchingAlerts) {
+        // Build a human-readable criteria summary for the email hero line.
+        const criteriaParts = [
+          alert.category,
+          alert.city,
+          alert.suburb,
+          alert.minPrice != null && alert.maxPrice != null
+            ? `${alert.minPrice.toLocaleString("fr-FR")}–${alert.maxPrice.toLocaleString("fr-FR")} $`
+            : alert.minPrice != null
+              ? `À partir de ${alert.minPrice.toLocaleString("fr-FR")} $`
+              : alert.maxPrice != null
+                ? `Jusqu'à ${alert.maxPrice.toLocaleString("fr-FR")} $`
+                : null,
+        ].filter(Boolean).join(" · ");
+
+        const { email, firstName } = alert.user;
+        void this.mail.sendPropertyAlert(email, firstName, alert.name, criteriaParts, [propertySnapshot]);
+      }
+    } catch (err) {
+      this.logger.error(`Failed to send property alert notifications for property ${property.id}`, err);
     }
   }
 
