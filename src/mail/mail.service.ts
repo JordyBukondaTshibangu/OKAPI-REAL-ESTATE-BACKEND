@@ -54,7 +54,8 @@ export class MailService implements OnModuleInit {
   }
 
   constructor() {
-    this.resend = new Resend(process.env.RESEND_API_KEY);
+    // Resend throws in the constructor if the key is missing, so we guard it.
+    this.resend = new Resend(process.env.RESEND_API_KEY ?? "missing");
   }
 
   async onModuleInit() {
