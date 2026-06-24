@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { toR2Url, UploadsService } from "../uploads/uploads.service";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -18,6 +19,7 @@ export class UsersService {
   constructor(
     private prisma: PrismaService,
     private uploads: UploadsService,
+    private mail: MailService,
   ) {}
 
   private resolveAvatarUrl(key: string | null): string | null {
@@ -86,12 +88,15 @@ export class UsersService {
   async deleteMe(userId: string) {
     const existing = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { profileImage: true },
+      select: { email: true, firstName: true, profileImage: true },
     });
     if (existing?.profileImage && !existing.profileImage.startsWith("http")) {
       await this.uploads.deleteKey(existing.profileImage).catch(() => {});
     }
     await this.prisma.user.delete({ where: { id: userId } });
+    if (existing) {
+      void this.mail.sendAccountDeleted(existing.email, existing.firstName);
+    }
     return { message: "Account deleted" };
   }
 }

@@ -1,7 +1,7 @@
-import { IsArray, IsInt, IsNumber, IsString } from "class-validator";
+import { IsArray, IsInt, IsNumber, IsOptional, IsString } from "class-validator";
 
 export class CreateAgentDto {
-  @IsString() agencyId: string;
+  @IsOptional() @IsString() agencyId?: string;
   @IsString() name: string;
   @IsString() title: string;
   @IsString() specialization: string;
@@ -12,7 +12,7 @@ export class CreateAgentDto {
   @IsNumber() rating: number;
   @IsInt() ratingsCount: number;
   @IsInt() responseMinutes: number;
-  @IsString() brokerLicense: string;
+  @IsOptional() @IsString() brokerLicense?: string;
   @IsString() bio: string;
   @IsString() photo: string;
   @IsString() photoGradient: string;

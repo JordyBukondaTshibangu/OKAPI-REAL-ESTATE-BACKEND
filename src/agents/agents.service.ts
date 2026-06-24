@@ -4,6 +4,7 @@ import { toR2Url, UploadsService } from "../uploads/uploads.service";
 import { CreateAgentDto } from "./dto/create-agent.dto";
 import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
+import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
 
 @Injectable()
 export class AgentsService {
@@ -35,7 +36,11 @@ export class AgentsService {
   }: FilterAgentDto) {
     const skip = (page - 1) * limit;
     const order = sortOrder ?? "asc";
-    const where: Record<string, unknown> = {};
+    // Tier 1 (Non-vérifié) agents can draft listings and build a profile,
+    // but stay invisible in public search until they reach Tier 2+.
+    const where: Record<string, unknown> = {
+      verificationTier: { not: "NON_VERIFIE" },
+    };
 
     if (search) {
       where.OR = [
@@ -92,7 +97,18 @@ export class AgentsService {
   }
 
   async create(dto: CreateAgentDto) {
-    const agent = await this.prisma.agent.create({ data: dto });
+    // Agents created directly by Admin are pre-vetted out of band (this is
+    // the existing admin-curation workflow), so they go straight in as
+    // Vérifié instead of starting at the bottom of the self-signup ladder.
+    const agent = await this.prisma.agent.create({
+      data: {
+        ...dto,
+        verificationTier: "VERIFIE",
+        idDocumentStatus: "APPROVED",
+        firstListingChecked: true,
+        verifiedAt: new Date(),
+      },
+    });
     return this.withPhotoUrl(agent);
   }
 
@@ -126,5 +142,21 @@ export class AgentsService {
     await this.findOne(id);
     await this.prisma.agent.delete({ where: { id } });
     return { message: "Agent deleted" };
+  }
+
+  // --- Agent self-service: "build a profile" (Tier 1 capability) ---
+
+  async getMyProfile(agentId: string) {
+    return this.findOne(agentId);
+  }
+
+  async updateMyProfile(agentId: string, dto: UpdateMyProfileDto) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({ where: { id: agentId }, data: dto });
+    return this.withPhotoUrl(agent);
+  }
+
+  async updateMyPhoto(agentId: string, tmpKey: string) {
+    return this.updatePhoto(agentId, tmpKey);
   }
 }
