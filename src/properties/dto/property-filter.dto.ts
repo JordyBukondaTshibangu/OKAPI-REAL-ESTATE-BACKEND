@@ -91,4 +91,14 @@ export class PropertyFilterDto extends PaginationDto {
   @IsOptional()
   @IsIn(["asc", "desc"])
   sortOrder?: "asc" | "desc";
+
+  @IsOptional()
+  @Transform(({ value }) => value === "true" || value === true)
+  @IsBoolean()
+  isShortTerm?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => value === "true" || value === true)
+  @IsBoolean()
+  isLongTerm?: boolean;
 }
