@@ -26,7 +26,9 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY package.json ./
+COPY docker-entrypoint.sh ./
+RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
 
-CMD ["node", "dist/src/main.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
