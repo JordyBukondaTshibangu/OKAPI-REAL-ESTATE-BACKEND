@@ -277,6 +277,19 @@ model Property {
   averagePriceArea Float?
   averageSizeArea  Float?
 
+  // --- Rental duration type ---
+  // Two independent booleans so agents can tag a property as short-term,
+  // long-term, or both. All false = unspecified (treated as long-term by clients).
+  isShortTerm     Boolean  @default(false)
+  isLongTerm      Boolean  @default(true)
+
+  // Short-term optional details (only meaningful when isShortTerm = true).
+  // Not enforced — agents fill these in for buyer convenience; contact stays WhatsApp-based.
+  pricePerNight   Float?
+  minStayNights   Int?
+  maxStayNights   Int?
+  shortTermNotes  String?
+
   viewCount       Int      @default(0)
   shareCount      Int      @default(0)
 

@@ -40,4 +40,14 @@ export class CreatePropertyDto {
   @IsOptional() @IsString() availableFrom?: string;
   @IsOptional() @IsNumber() averagePriceArea?: number;
   @IsOptional() @IsNumber() averageSizeArea?: number;
+
+  // --- Rental duration type ---
+  @IsOptional() @IsBoolean() isShortTerm?: boolean;
+  @IsOptional() @IsBoolean() isLongTerm?: boolean;
+
+  // Short-term optional details
+  @IsOptional() @IsNumber() pricePerNight?: number;
+  @IsOptional() @IsInt() minStayNights?: number;
+  @IsOptional() @IsInt() maxStayNights?: number;
+  @IsOptional() @IsString() shortTermNotes?: string;
 }

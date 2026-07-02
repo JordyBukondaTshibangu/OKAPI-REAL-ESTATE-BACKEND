@@ -63,6 +63,8 @@ export class PropertiesService {
       premium,
       sortBy,
       sortOrder,
+      isShortTerm,
+      isLongTerm,
     } = filter;
     const skip = (page - 1) * limit;
     const order = sortOrder ?? "asc";
@@ -89,6 +91,8 @@ export class PropertiesService {
       ...(period && { period }),
       ...(verified !== undefined && { verified }),
       ...(premium !== undefined && { premium }),
+      ...(isShortTerm !== undefined && { isShortTerm }),
+      ...(isLongTerm !== undefined && { isLongTerm }),
       ...(bedrooms !== undefined && { bedrooms }),
       ...(bathrooms !== undefined && { bathrooms }),
       ...((minPrice !== undefined || maxPrice !== undefined) && {
