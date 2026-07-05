@@ -55,6 +55,17 @@ export class PropertiesController {
     return this.propertiesService.update(id, dto);
   }
 
+  /**
+   * Paid boost: admin confirms payment then calls this to float the listing
+   * to the top of search results for `days` days.
+   * Body: { days: number }
+   */
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/boost")
+  boost(@Param("id") id: string, @Body("days") days: number) {
+    return this.propertiesService.boost(id, days ?? 7);
+  }
+
   @UseGuards(JwtAdminGuard)
   @Delete(":id")
   remove(@Param("id") id: string) {

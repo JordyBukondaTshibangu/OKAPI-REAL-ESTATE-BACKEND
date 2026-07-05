@@ -14,6 +14,15 @@ enum AgentVerificationTier {
   PARTENAIRE_CONFIANCE
 }
 
+// Monetisation plan — determines listing cap and feature access.
+// FREE agents get unlimited listings during graceEndsAt, then capped at 10.
+// PRO and AGENCY are unlocked manually by an admin after payment confirmation.
+enum AgentPlan {
+  FREE
+  PRO
+  AGENCY
+}
+
 enum DocumentReviewStatus {
   PENDING
   APPROVED
@@ -141,6 +150,16 @@ model Agent {
   whatsappNumber   String?
   resetToken       String?
   resetTokenExpiry DateTime?
+
+  // --- Monetisation plan ---
+  plan         AgentPlan @default(FREE)
+  // Grace period: unlimited listings until this date, then capped at 10 for FREE.
+  // Set to now() + 6 months on signup. Existing agents are backfilled.
+  graceEndsAt  DateTime  @default(dbgenerated("now() + interval '6 months'"))
+  // Whether the agent has been manually suspended by an admin.
+  isSuspended     Boolean   @default(false)
+  suspendedAt     DateTime?
+  suspendedReason String?
 
   // --- Tiered trust / verification ---
   verificationTier    AgentVerificationTier @default(NON_VERIFIE)
@@ -279,6 +298,9 @@ model Property {
 
   viewCount       Int      @default(0)
   shareCount      Int      @default(0)
+
+  // Boost: paid placement — listing appears first in search until this date.
+  boostedUntil    DateTime?
 
   createdAt       DateTime @default(now())
 

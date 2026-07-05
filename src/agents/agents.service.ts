@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { AgentPlan } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { toR2Url, UploadsService } from "../uploads/uploads.service";
 import { CreateAgentDto } from "./dto/create-agent.dto";
@@ -158,5 +159,47 @@ export class AgentsService {
 
   async updateMyPhoto(agentId: string, tmpKey: string) {
     return this.updatePhoto(agentId, tmpKey);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Admin: monetisation plan management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Manually upgrades or downgrades an agent's plan.
+   * Called by admin after confirming payment (e.g. via WhatsApp).
+   */
+  async updatePlan(agentId: string, plan: AgentPlan) {
+    if (!Object.values(AgentPlan).includes(plan)) {
+      throw new BadRequestException(`Invalid plan: ${plan}`);
+    }
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { plan },
+    });
+    return this.withPhotoUrl(agent);
+  }
+
+  /**
+   * Suspends an agent — their listings are hidden from public search.
+   * Provide a reason that will be stored for the audit trail.
+   */
+  async suspend(agentId: string, reason?: string) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { isSuspended: true, suspendedAt: new Date(), suspendedReason: reason ?? null },
+    });
+    return this.withPhotoUrl(agent);
+  }
+
+  /** Lifts a suspension — agent and their listings become visible again. */
+  async unsuspend(agentId: string) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { isSuspended: false, suspendedAt: null, suspendedReason: null },
+    });
+    return this.withPhotoUrl(agent);
   }
 }
