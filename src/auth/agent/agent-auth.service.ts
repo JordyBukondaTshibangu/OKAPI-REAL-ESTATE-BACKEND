@@ -10,7 +10,6 @@ import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import { MailService } from "../../mail/mail.service";
 import { PrismaService } from "../../prisma/prisma.service";
-import { SmsService } from "../../sms/sms.service";
 import { ForgotPasswordAgentDto } from "./dto/forgot-password-agent.dto";
 import { LoginAgentDto } from "./dto/login-agent.dto";
 import { RegisterAgentDto } from "./dto/register-agent.dto";
@@ -22,52 +21,75 @@ export class AgentAuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private mail: MailService,
-    private sms: SmsService,
   ) {}
 
+  // ---------------------------------------------------------------------------
+  // Registration
+  // ---------------------------------------------------------------------------
+
   /**
-   * Tier 1 (Non-vérifié): self-signup with phone/WhatsApp + password.
-   * No admin review at this point — the agent can draft listings and build
-   * a profile, but stays invisible in public search until promoted.
+   * Self-signup: creates an agent at NON_VERIFIE tier, immediately sends a
+   * 6-digit OTP to their email, and returns a JWT.
+   *
+   * The agent stays invisible in public search (NON_VERIFIE is filtered out)
+   * until:
+   *   1. They verify their email via POST /auth/agent/verify-email
+   *   2. An admin reviews the profile and calls PATCH /agents/:id/approve
    */
   async register(dto: RegisterAgentDto) {
+    // Uniqueness checks
+    const existingEmail = await this.prisma.agent.findUnique({
+      where: { email: dto.email },
+    });
+    if (existingEmail) throw new ConflictException("Email already in use");
+
     const existingPhone = await this.prisma.agent.findUnique({
       where: { phoneNumber: dto.phoneNumber },
     });
     if (existingPhone) throw new ConflictException("Phone number already in use");
 
-    if (dto.email) {
-      const existingEmail = await this.prisma.agent.findUnique({
-        where: { email: dto.email },
-      });
-      if (existingEmail) throw new ConflictException("Email already in use");
-    }
-
     if (dto.agencyId) {
-      const agency = await this.prisma.agency.findUnique({
-        where: { id: dto.agencyId },
-      });
+      const agency = await this.prisma.agency.findUnique({ where: { id: dto.agencyId } });
       if (!agency) throw new BadRequestException("Agency not found");
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    const { code, expiry } = this.generateOtp();
+
     const agent = await this.prisma.agent.create({
       data: {
         name: dto.name,
+        email: dto.email,
         phoneNumber: dto.phoneNumber,
         whatsappNumber: dto.whatsappNumber,
-        email: dto.email,
         passwordHash,
         agencyId: dto.agencyId,
-        // verificationTier defaults to NON_VERIFIE via the schema default.
+        emailOtpCode: code,
+        emailOtpExpiry: expiry,
+        // verificationTier defaults to NON_VERIFIE — remains so until admin approves.
       },
     });
 
+    // Send OTP email in the background (don't await — registration should not
+    // fail if the mail provider is slow).
+    this.mail.sendAgentEmailOtp(agent.email!, agent.name, code).catch(() => {});
+
     return {
       access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
-      agent: { id: agent.id, name: agent.name, verificationTier: agent.verificationTier },
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        email: agent.email,
+        verificationTier: agent.verificationTier,
+        emailVerified: agent.emailVerified,
+      },
+      message: "Account created — check your email for a verification code.",
     };
   }
+
+  // ---------------------------------------------------------------------------
+  // Login
+  // ---------------------------------------------------------------------------
 
   async login(dto: LoginAgentDto) {
     const agent = await this.prisma.agent.findFirst({
@@ -81,93 +103,126 @@ export class AgentAuthService {
 
     return {
       access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
-      agent: { id: agent.id, name: agent.name, verificationTier: agent.verificationTier },
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        email: agent.email,
+        verificationTier: agent.verificationTier,
+        emailVerified: agent.emailVerified,
+      },
     };
   }
 
   // ---------------------------------------------------------------------------
-  // Phone OTP verification
+  // Email OTP verification
   // ---------------------------------------------------------------------------
 
   /**
-   * Generates a 6-digit OTP, stores it (with a 10-minute expiry) on the agent
-   * record, and fires an SMS to their registered phone number.
-   *
-   * Rate-limited to once every 60 seconds by the controller-level throttler.
-   * Returns success regardless of current verificationTier so callers can
-   * request a re-send if the first SMS was lost.
+   * Re-sends the 6-digit OTP to the agent's email.
+   * Rate-limited: at most one code per 60 seconds.
    */
-  async sendOtp(agentId: string) {
+  async resendVerificationEmail(agentId: string) {
     const agent = await this.prisma.agent.findUnique({
       where: { id: agentId },
-      select: { phoneNumber: true, phoneOtpExpiry: true },
+      select: { email: true, name: true, emailVerified: true, emailOtpExpiry: true },
     });
     if (!agent) throw new UnauthorizedException("Agent not found");
+    if (agent.emailVerified) {
+      return { message: "Email is already verified — waiting for admin approval." };
+    }
 
-    // Prevent OTP spam: block re-sends if the existing code is still fresh (< 60 s old)
-    if (agent.phoneOtpExpiry) {
-      const expiresAt = agent.phoneOtpExpiry.getTime();
-      const now = Date.now();
-      const TEN_MINUTES = 10 * 60 * 1000;
-      const ageMs = TEN_MINUTES - (expiresAt - now);
+    // Prevent spam: block if the existing code is less than 60 s old
+    if (agent.emailOtpExpiry) {
+      const ageMs = 10 * 60 * 1000 - (agent.emailOtpExpiry.getTime() - Date.now());
       if (ageMs < 60_000) {
-        throw new TooManyRequestsException("Please wait 60 seconds before requesting a new code");
+        throw new TooManyRequestsException(
+          "Please wait 60 seconds before requesting a new code",
+        );
       }
     }
 
-    const code = Math.floor(100_000 + Math.random() * 900_000).toString();
-    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
+    const { code, expiry } = this.generateOtp();
     await this.prisma.agent.update({
       where: { id: agentId },
-      data: { phoneOtpCode: code, phoneOtpExpiry: expiry },
+      data: { emailOtpCode: code, emailOtpExpiry: expiry },
     });
 
-    await this.sms.sendOtp(agent.phoneNumber, code);
-    return { message: "OTP sent to your registered phone number" };
+    await this.mail.sendAgentEmailOtp(agent.email!, agent.name, code);
+    return { message: "Verification code resent — check your email." };
   }
 
   /**
-   * Validates the OTP and, on success, upgrades the agent to VERIFIE tier.
-   * The code is consumed (cleared) after a single successful use.
+   * Validates the emailed OTP.
+   * On success: marks emailVerified = true (tier stays NON_VERIFIE) and
+   * fires an admin notification so a human can review and approve.
    */
-  async verifyPhone(agentId: string, code: string) {
+  async verifyEmail(agentId: string, code: string) {
     const agent = await this.prisma.agent.findUnique({
       where: { id: agentId },
-      select: { phoneOtpCode: true, phoneOtpExpiry: true, verificationTier: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        emailVerified: true,
+        emailOtpCode: true,
+        emailOtpExpiry: true,
+      },
     });
     if (!agent) throw new UnauthorizedException("Agent not found");
 
+    if (agent.emailVerified) {
+      return {
+        message: "Email already verified — your profile is under admin review.",
+        emailVerified: true,
+      };
+    }
+
     if (
-      !agent.phoneOtpCode ||
-      !agent.phoneOtpExpiry ||
-      agent.phoneOtpExpiry < new Date()
+      !agent.emailOtpCode ||
+      !agent.emailOtpExpiry ||
+      agent.emailOtpExpiry < new Date()
     ) {
-      throw new BadRequestException("OTP expired or not requested — please request a new code");
+      throw new BadRequestException(
+        "OTP expired or not requested — please request a new code.",
+      );
     }
 
-    if (agent.phoneOtpCode !== code) {
-      throw new BadRequestException("Invalid OTP");
+    if (agent.emailOtpCode !== code) {
+      throw new BadRequestException("Invalid OTP.");
     }
 
-    // Consume the OTP and upgrade the tier
+    // Consume the OTP and mark email as verified.
+    // verificationTier intentionally stays NON_VERIFIE — admin must approve.
     await this.prisma.agent.update({
       where: { id: agentId },
-      data: {
-        phoneOtpCode: null,
-        phoneOtpExpiry: null,
-        verificationTier: "VERIFIE",
-        verifiedAt: new Date(),
-      },
+      data: { emailOtpCode: null, emailOtpExpiry: null, emailVerified: true },
     });
 
-    return { message: "Phone verified — your account is now active", verificationTier: "VERIFIE" };
+    // Notify admin in the background — don't block the response.
+    this.mail
+      .sendAdminAgentPendingApproval({
+        agentId: agent.id,
+        agentName: agent.name,
+        agentEmail: agent.email!,
+        agentPhone: agent.phoneNumber,
+      })
+      .catch(() => {});
+
+    return {
+      message:
+        "Email verified! Your profile is now under review. " +
+        "You will be notified once an admin approves your account.",
+      emailVerified: true,
+    };
   }
 
+  // ---------------------------------------------------------------------------
+  // Password reset
+  // ---------------------------------------------------------------------------
+
   async forgotPassword(dto: ForgotPasswordAgentDto) {
-    const agent = await this.prisma.agent.findUnique({
-      where: { email: dto.email },
-    });
+    const agent = await this.prisma.agent.findUnique({ where: { email: dto.email } });
     // Always return success to prevent email enumeration
     if (!agent) return { message: "If that email exists, a reset link was sent" };
 
@@ -185,10 +240,7 @@ export class AgentAuthService {
 
   async resetPassword(dto: ResetPasswordAgentDto) {
     const agent = await this.prisma.agent.findFirst({
-      where: {
-        resetToken: dto.token,
-        resetTokenExpiry: { gt: new Date() },
-      },
+      where: { resetToken: dto.token, resetTokenExpiry: { gt: new Date() } },
     });
     if (!agent) throw new BadRequestException("Invalid or expired reset token");
 
@@ -198,5 +250,15 @@ export class AgentAuthService {
       data: { passwordHash, resetToken: null, resetTokenExpiry: null },
     });
     return { message: "Password reset successful" };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private generateOtp(): { code: string; expiry: Date } {
+    const code = Math.floor(100_000 + Math.random() * 900_000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    return { code, expiry };
   }
 }

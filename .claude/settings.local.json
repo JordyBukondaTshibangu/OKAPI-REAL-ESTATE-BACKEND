@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(pnpm start:dev)",
+      "Bash(docker exec *)",
+      "Bash(curl -s http://localhost:8080)",
+      "Bash(pnpm exec *)",
+      "Bash(npx prisma *)",
+      "Bash(git remote *)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm config *)",
+      "Bash(pnpm --version)",
+      "Bash(pnpm store *)",
+      "Bash(PNPM_HOME=/Users/jordy/Library/pnpm pnpm add nodemailer @types/nodemailer)",
+      "Bash(npx tsc *)",
+      "Bash(npx nest *)"
+    ]
+  }
+}

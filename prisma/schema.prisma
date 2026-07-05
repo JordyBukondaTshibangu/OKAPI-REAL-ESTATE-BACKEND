@@ -151,9 +151,10 @@ model Agent {
   resetToken       String?
   resetTokenExpiry DateTime?
 
-  // --- Phone OTP verification ---
-  phoneOtpCode   String?
-  phoneOtpExpiry DateTime?
+  // --- Email OTP verification (self-signup flow) ---
+  emailVerified  Boolean   @default(false)
+  emailOtpCode   String?
+  emailOtpExpiry DateTime?
 
   // --- Monetisation plan ---
   plan         AgentPlan @default(FREE)

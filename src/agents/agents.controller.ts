@@ -77,6 +77,16 @@ export class AgentsController {
   }
 
   /**
+   * Approve a self-registered agent — promotes them from NON_VERIFIE → VERIFIE
+   * so they become visible in public search and can publish listings.
+   */
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/approve")
+  approve(@Param("id") id: string) {
+    return this.agentsService.approve(id);
+  }
+
+  /**
    * Upgrade or downgrade an agent's monetisation plan.
    * Body: { plan: "FREE" | "PRO" | "AGENCY" }
    * Called manually by admin after payment is confirmed (e.g. via WhatsApp/Mobile Money).

@@ -1,4 +1,5 @@
--- AlterTable Agent: add phone OTP fields for self-service phone verification
+-- AlterTable Agent: email OTP + emailVerified for self-signup flow
 ALTER TABLE "Agent"
-  ADD COLUMN "phoneOtpCode"   TEXT,
-  ADD COLUMN "phoneOtpExpiry" TIMESTAMP(3);
+  ADD COLUMN "emailVerified"  BOOLEAN      NOT NULL DEFAULT false,
+  ADD COLUMN "emailOtpCode"   TEXT,
+  ADD COLUMN "emailOtpExpiry" TIMESTAMP(3);

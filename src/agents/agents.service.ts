@@ -162,6 +162,28 @@ export class AgentsService {
   }
 
   // ---------------------------------------------------------------------------
+  // Admin: approval
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Promotes a self-registered agent from NON_VERIFIE → VERIFIE.
+   * Called from the admin dashboard after reviewing their profile.
+   * Once approved the agent appears in public search and can publish listings.
+   */
+  async approve(agentId: string) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        verificationTier: "VERIFIE",
+        verifiedAt: new Date(),
+        firstListingChecked: false, // admin will review their first listing
+      },
+    });
+    return this.withPhotoUrl(agent);
+  }
+
+  // ---------------------------------------------------------------------------
   // Admin: monetisation plan management
   // ---------------------------------------------------------------------------
 

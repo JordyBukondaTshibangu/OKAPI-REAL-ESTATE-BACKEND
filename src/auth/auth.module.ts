@@ -2,7 +2,6 @@ import { Module } from "@nestjs/common";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { MailModule } from "../mail/mail.module";
-import { SmsModule } from "../sms/sms.module";
 import { AdminAuthController } from "./admin/admin-auth.controller";
 import { AdminAuthService } from "./admin/admin-auth.service";
 import { AgentAuthController } from "./agent/agent-auth.controller";
@@ -17,7 +16,6 @@ import { UserAuthService } from "./user/user-auth.service";
   imports: [
     PassportModule,
     MailModule,
-    SmsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? "secret",
       signOptions: { expiresIn: "7d" },

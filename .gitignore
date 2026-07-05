@@ -52,4 +52,4 @@ prisma/*.db-journal
 
 CLAUDE.md
 ./claude
-.claude
+.claudedist/
