@@ -151,6 +151,10 @@ model Agent {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  // --- Phone OTP verification ---
+  phoneOtpCode   String?
+  phoneOtpExpiry DateTime?
+
   // --- Monetisation plan ---
   plan         AgentPlan @default(FREE)
   // Grace period: unlimited listings until this date, then capped at 10 for FREE.

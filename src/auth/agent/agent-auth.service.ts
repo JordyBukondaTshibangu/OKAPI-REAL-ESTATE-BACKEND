@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  TooManyRequestsException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
@@ -9,6 +10,7 @@ import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import { MailService } from "../../mail/mail.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { SmsService } from "../../sms/sms.service";
 import { ForgotPasswordAgentDto } from "./dto/forgot-password-agent.dto";
 import { LoginAgentDto } from "./dto/login-agent.dto";
 import { RegisterAgentDto } from "./dto/register-agent.dto";
@@ -20,6 +22,7 @@ export class AgentAuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private mail: MailService,
+    private sms: SmsService,
   ) {}
 
   /**
@@ -80,6 +83,85 @@ export class AgentAuthService {
       access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
       agent: { id: agent.id, name: agent.name, verificationTier: agent.verificationTier },
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phone OTP verification
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Generates a 6-digit OTP, stores it (with a 10-minute expiry) on the agent
+   * record, and fires an SMS to their registered phone number.
+   *
+   * Rate-limited to once every 60 seconds by the controller-level throttler.
+   * Returns success regardless of current verificationTier so callers can
+   * request a re-send if the first SMS was lost.
+   */
+  async sendOtp(agentId: string) {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { phoneNumber: true, phoneOtpExpiry: true },
+    });
+    if (!agent) throw new UnauthorizedException("Agent not found");
+
+    // Prevent OTP spam: block re-sends if the existing code is still fresh (< 60 s old)
+    if (agent.phoneOtpExpiry) {
+      const expiresAt = agent.phoneOtpExpiry.getTime();
+      const now = Date.now();
+      const TEN_MINUTES = 10 * 60 * 1000;
+      const ageMs = TEN_MINUTES - (expiresAt - now);
+      if (ageMs < 60_000) {
+        throw new TooManyRequestsException("Please wait 60 seconds before requesting a new code");
+      }
+    }
+
+    const code = Math.floor(100_000 + Math.random() * 900_000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { phoneOtpCode: code, phoneOtpExpiry: expiry },
+    });
+
+    await this.sms.sendOtp(agent.phoneNumber, code);
+    return { message: "OTP sent to your registered phone number" };
+  }
+
+  /**
+   * Validates the OTP and, on success, upgrades the agent to VERIFIE tier.
+   * The code is consumed (cleared) after a single successful use.
+   */
+  async verifyPhone(agentId: string, code: string) {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { phoneOtpCode: true, phoneOtpExpiry: true, verificationTier: true },
+    });
+    if (!agent) throw new UnauthorizedException("Agent not found");
+
+    if (
+      !agent.phoneOtpCode ||
+      !agent.phoneOtpExpiry ||
+      agent.phoneOtpExpiry < new Date()
+    ) {
+      throw new BadRequestException("OTP expired or not requested — please request a new code");
+    }
+
+    if (agent.phoneOtpCode !== code) {
+      throw new BadRequestException("Invalid OTP");
+    }
+
+    // Consume the OTP and upgrade the tier
+    await this.prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        phoneOtpCode: null,
+        phoneOtpExpiry: null,
+        verificationTier: "VERIFIE",
+        verifiedAt: new Date(),
+      },
+    });
+
+    return { message: "Phone verified — your account is now active", verificationTier: "VERIFIE" };
   }
 
   async forgotPassword(dto: ForgotPasswordAgentDto) {
