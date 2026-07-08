@@ -10,6 +10,7 @@ import {
   Req,
   UseGuards,
 } from "@nestjs/common";
+import { AgentPlan } from "@prisma/client";
 import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
 import { JwtAgentGuard } from "../auth/guards/jwt-agent.guard";
 import { AgentsService } from "./agents.service";
@@ -17,6 +18,7 @@ import { CreateAgentDto } from "./dto/create-agent.dto";
 import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
+import { UpdateMyAgencyDto } from "./dto/update-my-agency.dto";
 import { UpdatePhotoDto } from "./dto/update-photo.dto";
 
 interface AgentRequest {
@@ -39,6 +41,12 @@ export class AgentsController {
   @Patch("me")
   updateMyProfile(@Req() req: AgentRequest, @Body() dto: UpdateMyProfileDto) {
     return this.agentsService.updateMyProfile(req.user.agentId, dto);
+  }
+
+  @UseGuards(JwtAgentGuard)
+  @Patch("me/agency")
+  updateMyAgency(@Req() req: AgentRequest, @Body() dto: UpdateMyAgencyDto) {
+    return this.agentsService.updateMyAgency(req.user.agentId, dto);
   }
 
   @UseGuards(JwtAgentGuard)
@@ -73,6 +81,41 @@ export class AgentsController {
   @Patch(":id/photo")
   updatePhoto(@Param("id") id: string, @Body() dto: UpdatePhotoDto) {
     return this.agentsService.updatePhoto(id, dto.key);
+  }
+
+  /**
+   * Approve a self-registered agent — promotes them from NON_VERIFIE → VERIFIE
+   * so they become visible in public search and can publish listings.
+   */
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/approve")
+  approve(@Param("id") id: string) {
+    return this.agentsService.approve(id);
+  }
+
+  /**
+   * Upgrade or downgrade an agent's monetisation plan.
+   * Body: { plan: "FREE" | "PRO" | "AGENCY" }
+   * Called manually by admin after payment is confirmed (e.g. via WhatsApp/Mobile Money).
+   */
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/plan")
+  updatePlan(@Param("id") id: string, @Body("plan") plan: AgentPlan) {
+    return this.agentsService.updatePlan(id, plan);
+  }
+
+  /** Suspend an agent — hides their listings from public search. Body: { reason?: string } */
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/suspend")
+  suspend(@Param("id") id: string, @Body("reason") reason?: string) {
+    return this.agentsService.suspend(id, reason);
+  }
+
+  /** Lift a suspension — agent and listings become visible again. */
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/unsuspend")
+  unsuspend(@Param("id") id: string) {
+    return this.agentsService.unsuspend(id);
   }
 
   @UseGuards(JwtAdminGuard)

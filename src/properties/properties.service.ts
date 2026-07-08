@@ -1,10 +1,18 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import {
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { MailService } from "../mail/mail.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { UploadsService } from "../uploads/uploads.service";
 import { CreatePropertyDto } from "./dto/create-property.dto";
 import { PropertyFilterDto } from "./dto/property-filter.dto";
 import { UpdatePropertyDto } from "./dto/update-property.dto";
+
+/** Free agents may have at most this many active listings after their grace period ends. */
+const FREE_LISTING_CAP = 10;
 
 @Injectable()
 export class PropertiesService {
@@ -23,12 +31,19 @@ export class PropertiesService {
   }
 
   private withGalleryUrls<T extends { gallery: string[] }>(property: T): T {
-    return { ...property, gallery: property.gallery.map((key) => this.toGalleryUrl(key)) };
+    return {
+      ...property,
+      gallery: property.gallery.map((key) => this.toGalleryUrl(key)),
+    };
   }
 
   /** Reshapes raw view/share counters and the favorites relation into a `performance` summary. */
   private withPerformance<
-    T extends { viewCount: number; shareCount: number; _count?: { favorites: number } },
+    T extends {
+      viewCount: number;
+      shareCount: number;
+      _count?: { favorites: number };
+    },
   >(property: T) {
     const { viewCount, shareCount, _count, ...rest } = property;
     return {
@@ -70,6 +85,8 @@ export class PropertiesService {
     const order = sortOrder ?? "asc";
 
     const where = {
+      // Only surface listings from non-suspended agents.
+      agent: { isSuspended: false },
       ...(search && {
         OR: [
           { title: { contains: search, mode: "insensitive" as const } },
@@ -79,7 +96,17 @@ export class PropertiesService {
           { suburb: { contains: search, mode: "insensitive" as const } },
           { neighborhood: { contains: search, mode: "insensitive" as const } },
           { category: { contains: search, mode: "insensitive" as const } },
-          { listingType: { contains: search, mode: "insensitive" as const } },
+          { reference: { contains: search, mode: "insensitive" as const } },
+          { zone: { contains: search, mode: "insensitive" as const } },
+          // Search by agent name or agency name lets users find a specific agent's listings
+          {
+            agent: { name: { contains: search, mode: "insensitive" as const } },
+          },
+          {
+            agency: {
+              name: { contains: search, mode: "insensitive" as const },
+            },
+          },
         ],
       }),
       ...(agentId && { agentId }),
@@ -109,9 +136,15 @@ export class PropertiesService {
       }),
     };
 
-    const orderBy = sortBy
-      ? { [sortBy]: order }
-      : { createdAt: "desc" as const };
+    // Boosted listings (boostedUntil > now) always float to the top;
+    // within each group the user's chosen sort (or default createdAt desc) applies.
+    const now = new Date();
+    const orderBy: object[] = [
+      // Listings with an active boost come first.
+      { boostedUntil: { sort: "desc", nulls: "last" } },
+      // Then apply the requested sort, or fall back to newest-first.
+      sortBy ? { [sortBy]: order } : { createdAt: "desc" as const },
+    ];
 
     const [data, total] = await this.prisma.$transaction([
       this.prisma.property.findMany({
@@ -119,12 +152,23 @@ export class PropertiesService {
         skip,
         take: limit,
         orderBy,
-        include: { agent: true, agency: true, _count: { select: { favorites: true } } },
+        include: {
+          agent: true,
+          agency: true,
+          _count: { select: { favorites: true } },
+        },
       }),
       this.prisma.property.count({ where }),
     ]);
+
+    // Mark listings as boosted in the response so the frontend can badge them.
+    const mapped = data.map((property) => ({
+      ...this.withPerformance(this.withGalleryUrls(property)),
+      isBoosted: property.boostedUntil != null && property.boostedUntil > now,
+    }));
+
     return {
-      data: data.map((property) => this.withPerformance(this.withGalleryUrls(property))),
+      data: mapped,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -132,13 +176,27 @@ export class PropertiesService {
   async findOne(id: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
-      include: { agent: true, agency: true, _count: { select: { favorites: true } } },
+      include: {
+        agent: true,
+        agency: true,
+        _count: { select: { favorites: true } },
+      },
     });
     if (!property) throw new NotFoundException("Property not found");
     return this.withPerformance(this.withGalleryUrls(property));
   }
 
-  async create(dto: CreatePropertyDto) {
+  /**
+   * Creates a property. For agent-submitted listings, enforces the FREE plan
+   * cap (10 active listings) once the grace period has expired.
+   * Admin-created listings bypass the cap entirely.
+   */
+  async create(dto: CreatePropertyDto, agentId?: string) {
+    // Enforce cap only for self-submitting agents (agentId provided).
+    if (agentId) {
+      await this.enforceListingCap(agentId);
+    }
+
     const property = await this.prisma.property.create({ data: dto });
 
     // Gallery keys arrive as tmp/ uploads (see UploadsService.createPresignedUploads).
@@ -146,7 +204,10 @@ export class PropertiesService {
     // prefix so they survive the tmp/ lifecycle expiry rule.
     let promoted = property;
     try {
-      const promotedKeys = await this.uploads.promoteKeys(property.gallery, property.id);
+      const promotedKeys = await this.uploads.promoteKeys(
+        property.gallery,
+        property.id,
+      );
       promoted = await this.prisma.property.update({
         where: { id: property.id },
         data: { gallery: promotedKeys },
@@ -213,17 +274,48 @@ export class PropertiesService {
       const matchingAlerts = await this.prisma.alert.findMany({
         where: {
           active: true,
-          ...(property.listingType && { OR: [{ listingType: null }, { listingType: property.listingType }] }),
-          ...(property.category && { OR: [{ category: null }, { category: property.category }] }),
-          ...(property.city && { OR: [{ city: null }, { city: { contains: property.city, mode: "insensitive" as const } }] }),
-          ...(property.suburb && { OR: [{ suburb: null }, { suburb: { contains: property.suburb, mode: "insensitive" as const } }] }),
+          ...(property.listingType && {
+            OR: [{ listingType: null }, { listingType: property.listingType }],
+          }),
+          ...(property.category && {
+            OR: [{ category: null }, { category: property.category }],
+          }),
+          ...(property.city && {
+            OR: [
+              { city: null },
+              {
+                city: { contains: property.city, mode: "insensitive" as const },
+              },
+            ],
+          }),
+          ...(property.suburb && {
+            OR: [
+              { suburb: null },
+              {
+                suburb: {
+                  contains: property.suburb,
+                  mode: "insensitive" as const,
+                },
+              },
+            ],
+          }),
           OR: [{ minPrice: null }, { minPrice: { lte: property.price } }],
           AND: [
             { OR: [{ maxPrice: null }, { maxPrice: { gte: property.price } }] },
             ...(property.bedrooms != null
               ? [
-                  { OR: [{ minBedrooms: null }, { minBedrooms: { lte: property.bedrooms! } }] },
-                  { OR: [{ maxBedrooms: null }, { maxBedrooms: { gte: property.bedrooms! } }] },
+                  {
+                    OR: [
+                      { minBedrooms: null },
+                      { minBedrooms: { lte: property.bedrooms! } },
+                    ],
+                  },
+                  {
+                    OR: [
+                      { maxBedrooms: null },
+                      { maxBedrooms: { gte: property.bedrooms! } },
+                    ],
+                  },
                 ]
               : []),
           ],
@@ -246,13 +338,62 @@ export class PropertiesService {
               : alert.maxPrice != null
                 ? `Jusqu'à ${alert.maxPrice.toLocaleString("fr-FR")} $`
                 : null,
-        ].filter(Boolean).join(" · ");
+        ]
+          .filter(Boolean)
+          .join(" · ");
 
         const { email, firstName } = alert.user;
-        void this.mail.sendPropertyAlert(email, firstName, alert.name, criteriaParts, [propertySnapshot]);
+        void this.mail.sendPropertyAlert(
+          email,
+          firstName,
+          alert.name,
+          criteriaParts,
+          [propertySnapshot],
+        );
       }
     } catch (err) {
-      this.logger.error(`Failed to send property alert notifications for property ${property.id}`, err);
+      this.logger.error(
+        `Failed to send property alert notifications for property ${property.id}`,
+        err,
+      );
+    }
+  }
+
+  /**
+   * Checks whether the agent is allowed to create another listing.
+   * FREE agents are capped at FREE_LISTING_CAP after their grace period ends.
+   * PRO and AGENCY plans have no cap.
+   */
+  private async enforceListingCap(agentId: string) {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { plan: true, graceEndsAt: true, isSuspended: true },
+    });
+
+    if (!agent) throw new NotFoundException("Agent not found");
+
+    if (agent.isSuspended) {
+      throw new ForbiddenException(
+        "Your account has been suspended. Please contact support.",
+      );
+    }
+
+    // PRO and AGENCY plans have no listing cap.
+    if (agent.plan !== "FREE") return;
+
+    // Still within grace period — no cap enforced.
+    if (agent.graceEndsAt > new Date()) return;
+
+    // Grace period expired: count active listings.
+    const activeCount = await this.prisma.property.count({
+      where: { agentId },
+    });
+
+    if (activeCount >= FREE_LISTING_CAP) {
+      throw new ForbiddenException(
+        `Free plan limit reached (${FREE_LISTING_CAP} listings). ` +
+          `Upgrade to Pro to publish unlimited listings.`,
+      );
     }
   }
 
@@ -261,6 +402,23 @@ export class PropertiesService {
     const property = await this.prisma.property.update({
       where: { id },
       data: dto,
+      include: { _count: { select: { favorites: true } } },
+    });
+    return this.withPerformance(this.withGalleryUrls(property));
+  }
+
+  /**
+   * Boost a listing for the given number of days (paid placement).
+   * Admin confirms payment manually, then calls this endpoint.
+   */
+  async boost(id: string, days: number) {
+    await this.findOne(id);
+    const boostedUntil = new Date();
+    boostedUntil.setDate(boostedUntil.getDate() + days);
+
+    const property = await this.prisma.property.update({
+      where: { id },
+      data: { boostedUntil },
       include: { _count: { select: { favorites: true } } },
     });
     return this.withPerformance(this.withGalleryUrls(property));

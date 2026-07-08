@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { AgentPlan } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { toR2Url, UploadsService } from "../uploads/uploads.service";
 import { CreateAgentDto } from "./dto/create-agent.dto";
 import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
+import { UpdateMyAgencyDto } from "./dto/update-my-agency.dto";
 
 @Injectable()
 export class AgentsService {
@@ -13,12 +15,13 @@ export class AgentsService {
     private uploads: UploadsService,
   ) {}
 
-  private resolvePhotoUrl(key: string): string {
+  private resolvePhotoUrl(key: string | null | undefined): string {
+    if (!key || key.trim() === "") return "";
     if (key.startsWith("http")) return key;
     return toR2Url(key);
   }
 
-  private withPhotoUrl<T extends { photo: string }>(agent: T): T {
+  private withPhotoUrl<T extends { photo: string | null }>(agent: T): T {
     return { ...agent, photo: this.resolvePhotoUrl(agent.photo) };
   }
 
@@ -31,16 +34,28 @@ export class AgentsService {
     specialization,
     language,
     nationality,
+    agencyId,
+    verificationTier,
+    emailVerified,
     sortBy,
     sortOrder,
   }: FilterAgentDto) {
     const skip = (page - 1) * limit;
     const order = sortOrder ?? "asc";
-    // Tier 1 (Non-vérifié) agents can draft listings and build a profile,
-    // but stay invisible in public search until they reach Tier 2+.
-    const where: Record<string, unknown> = {
-      verificationTier: { not: "NON_VERIFIE" },
-    };
+
+    const where: Record<string, unknown> = {};
+
+    // When an explicit verificationTier filter is provided (e.g. from the admin
+    // dashboard pending queue), honour it. When agencyId is provided (agency
+    // portal team view), show all agents regardless of tier. Otherwise hide
+    // NON_VERIFIE agents from the public-facing listing.
+    if (verificationTier) {
+      where.verificationTier = verificationTier;
+    } else if (!agencyId) {
+      where.verificationTier = { not: "NON_VERIFIE" };
+    }
+
+    if (emailVerified !== undefined) where.emailVerified = emailVerified;
 
     if (search) {
       where.OR = [
@@ -58,6 +73,8 @@ export class AgentsService {
     if (language) where.languages = { has: language };
     if (nationality)
       where.nationality = { equals: nationality, mode: "insensitive" };
+    // Agency portal: scope to a specific agency's team (bypasses verificationTier filter)
+    if (agencyId) where.agencyId = agencyId;
 
     const orderBy =
       sortBy === "agency"
@@ -114,7 +131,14 @@ export class AgentsService {
 
   async update(id: string, dto: UpdateAgentDto) {
     await this.findOne(id);
-    const agent = await this.prisma.agent.update({ where: { id }, data: dto });
+    // Remap dashboard field names → Prisma model field names,
+    // and strip Agency-only fields that don't belong on Agent.
+    const { whatsapp, graceEndsAt, freeListingCap, ...rest } = dto as any;
+    const data: any = {
+      ...rest,
+      ...(whatsapp !== undefined ? { whatsappNumber: whatsapp } : {}),
+    };
+    const agent = await this.prisma.agent.update({ where: { id }, data });
     return this.withPhotoUrl(agent);
   }
 
@@ -152,11 +176,108 @@ export class AgentsService {
 
   async updateMyProfile(agentId: string, dto: UpdateMyProfileDto) {
     await this.findOne(agentId);
-    const agent = await this.prisma.agent.update({ where: { id: agentId }, data: dto });
-    return this.withPhotoUrl(agent);
+
+    // Strip empty strings so we never write "" into unique fields (e.g. phoneNumber).
+    const data: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(dto)) {
+      if (v !== undefined && v !== "") data[k] = v;
+    }
+
+    try {
+      const agent = await this.prisma.agent.update({ where: { id: agentId }, data });
+      return this.withPhotoUrl(agent);
+    } catch (err: any) {
+      if (err?.code === "P2002") {
+        const field = err?.meta?.target?.[0] ?? "field";
+        throw new BadRequestException(`Ce ${field} est déjà utilisé par un autre agent.`);
+      }
+      throw err;
+    }
+  }
+
+  async updateMyAgency(agentId: string, dto: UpdateMyAgencyDto) {
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { agencyId: true, agentType: true },
+    });
+    if (!agent) throw new NotFoundException("Agent not found");
+    if (agent.agentType !== "AGENCY_OWNER") throw new ForbiddenException("Only agency owners can update agency details.");
+    if (!agent.agencyId) throw new ForbiddenException("No agency linked to your account.");
+
+    // Strip empty strings before writing
+    const data: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(dto)) {
+      if (v !== undefined && v !== "") data[k] = v;
+    }
+
+    return this.prisma.agency.update({ where: { id: agent.agencyId }, data });
   }
 
   async updateMyPhoto(agentId: string, tmpKey: string) {
     return this.updatePhoto(agentId, tmpKey);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Admin: approval
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Promotes a self-registered agent from NON_VERIFIE → VERIFIE.
+   * Called from the admin dashboard after reviewing their profile.
+   * Once approved the agent appears in public search and can publish listings.
+   */
+  async approve(agentId: string) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        verificationTier: "VERIFIE",
+        verifiedAt: new Date(),
+        firstListingChecked: false, // admin will review their first listing
+      },
+    });
+    return this.withPhotoUrl(agent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Admin: monetisation plan management
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Manually upgrades or downgrades an agent's plan.
+   * Called by admin after confirming payment (e.g. via WhatsApp).
+   */
+  async updatePlan(agentId: string, plan: AgentPlan) {
+    if (!Object.values(AgentPlan).includes(plan)) {
+      throw new BadRequestException(`Invalid plan: ${plan}`);
+    }
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { plan },
+    });
+    return this.withPhotoUrl(agent);
+  }
+
+  /**
+   * Suspends an agent — their listings are hidden from public search.
+   * Provide a reason that will be stored for the audit trail.
+   */
+  async suspend(agentId: string, reason?: string) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { isSuspended: true, suspendedAt: new Date(), suspendedReason: reason ?? null },
+    });
+    return this.withPhotoUrl(agent);
+  }
+
+  /** Lifts a suspension — agent and their listings become visible again. */
+  async unsuspend(agentId: string) {
+    await this.findOne(agentId);
+    const agent = await this.prisma.agent.update({
+      where: { id: agentId },
+      data: { isSuspended: false, suspendedAt: null, suspendedReason: null },
+    });
+    return this.withPhotoUrl(agent);
   }
 }

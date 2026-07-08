@@ -56,3 +56,4 @@ CLAUDE.md
 /dist
 dist
 dist/
+.claudedist/
