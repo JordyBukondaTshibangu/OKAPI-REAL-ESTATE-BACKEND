@@ -31,12 +31,19 @@ export class PropertiesService {
   }
 
   private withGalleryUrls<T extends { gallery: string[] }>(property: T): T {
-    return { ...property, gallery: property.gallery.map((key) => this.toGalleryUrl(key)) };
+    return {
+      ...property,
+      gallery: property.gallery.map((key) => this.toGalleryUrl(key)),
+    };
   }
 
   /** Reshapes raw view/share counters and the favorites relation into a `performance` summary. */
   private withPerformance<
-    T extends { viewCount: number; shareCount: number; _count?: { favorites: number } },
+    T extends {
+      viewCount: number;
+      shareCount: number;
+      _count?: { favorites: number };
+    },
   >(property: T) {
     const { viewCount, shareCount, _count, ...rest } = property;
     return {
@@ -89,7 +96,17 @@ export class PropertiesService {
           { suburb: { contains: search, mode: "insensitive" as const } },
           { neighborhood: { contains: search, mode: "insensitive" as const } },
           { category: { contains: search, mode: "insensitive" as const } },
-          { listingType: { contains: search, mode: "insensitive" as const } },
+          { reference: { contains: search, mode: "insensitive" as const } },
+          { zone: { contains: search, mode: "insensitive" as const } },
+          // Search by agent name or agency name lets users find a specific agent's listings
+          {
+            agent: { name: { contains: search, mode: "insensitive" as const } },
+          },
+          {
+            agency: {
+              name: { contains: search, mode: "insensitive" as const },
+            },
+          },
         ],
       }),
       ...(agentId && { agentId }),
@@ -135,7 +152,11 @@ export class PropertiesService {
         skip,
         take: limit,
         orderBy,
-        include: { agent: true, agency: true, _count: { select: { favorites: true } } },
+        include: {
+          agent: true,
+          agency: true,
+          _count: { select: { favorites: true } },
+        },
       }),
       this.prisma.property.count({ where }),
     ]);
@@ -155,7 +176,11 @@ export class PropertiesService {
   async findOne(id: string) {
     const property = await this.prisma.property.findUnique({
       where: { id },
-      include: { agent: true, agency: true, _count: { select: { favorites: true } } },
+      include: {
+        agent: true,
+        agency: true,
+        _count: { select: { favorites: true } },
+      },
     });
     if (!property) throw new NotFoundException("Property not found");
     return this.withPerformance(this.withGalleryUrls(property));
@@ -179,7 +204,10 @@ export class PropertiesService {
     // prefix so they survive the tmp/ lifecycle expiry rule.
     let promoted = property;
     try {
-      const promotedKeys = await this.uploads.promoteKeys(property.gallery, property.id);
+      const promotedKeys = await this.uploads.promoteKeys(
+        property.gallery,
+        property.id,
+      );
       promoted = await this.prisma.property.update({
         where: { id: property.id },
         data: { gallery: promotedKeys },
@@ -246,17 +274,48 @@ export class PropertiesService {
       const matchingAlerts = await this.prisma.alert.findMany({
         where: {
           active: true,
-          ...(property.listingType && { OR: [{ listingType: null }, { listingType: property.listingType }] }),
-          ...(property.category && { OR: [{ category: null }, { category: property.category }] }),
-          ...(property.city && { OR: [{ city: null }, { city: { contains: property.city, mode: "insensitive" as const } }] }),
-          ...(property.suburb && { OR: [{ suburb: null }, { suburb: { contains: property.suburb, mode: "insensitive" as const } }] }),
+          ...(property.listingType && {
+            OR: [{ listingType: null }, { listingType: property.listingType }],
+          }),
+          ...(property.category && {
+            OR: [{ category: null }, { category: property.category }],
+          }),
+          ...(property.city && {
+            OR: [
+              { city: null },
+              {
+                city: { contains: property.city, mode: "insensitive" as const },
+              },
+            ],
+          }),
+          ...(property.suburb && {
+            OR: [
+              { suburb: null },
+              {
+                suburb: {
+                  contains: property.suburb,
+                  mode: "insensitive" as const,
+                },
+              },
+            ],
+          }),
           OR: [{ minPrice: null }, { minPrice: { lte: property.price } }],
           AND: [
             { OR: [{ maxPrice: null }, { maxPrice: { gte: property.price } }] },
             ...(property.bedrooms != null
               ? [
-                  { OR: [{ minBedrooms: null }, { minBedrooms: { lte: property.bedrooms! } }] },
-                  { OR: [{ maxBedrooms: null }, { maxBedrooms: { gte: property.bedrooms! } }] },
+                  {
+                    OR: [
+                      { minBedrooms: null },
+                      { minBedrooms: { lte: property.bedrooms! } },
+                    ],
+                  },
+                  {
+                    OR: [
+                      { maxBedrooms: null },
+                      { maxBedrooms: { gte: property.bedrooms! } },
+                    ],
+                  },
                 ]
               : []),
           ],
@@ -279,13 +338,24 @@ export class PropertiesService {
               : alert.maxPrice != null
                 ? `Jusqu'à ${alert.maxPrice.toLocaleString("fr-FR")} $`
                 : null,
-        ].filter(Boolean).join(" · ");
+        ]
+          .filter(Boolean)
+          .join(" · ");
 
         const { email, firstName } = alert.user;
-        void this.mail.sendPropertyAlert(email, firstName, alert.name, criteriaParts, [propertySnapshot]);
+        void this.mail.sendPropertyAlert(
+          email,
+          firstName,
+          alert.name,
+          criteriaParts,
+          [propertySnapshot],
+        );
       }
     } catch (err) {
-      this.logger.error(`Failed to send property alert notifications for property ${property.id}`, err);
+      this.logger.error(
+        `Failed to send property alert notifications for property ${property.id}`,
+        err,
+      );
     }
   }
 
@@ -303,7 +373,9 @@ export class PropertiesService {
     if (!agent) throw new NotFoundException("Agent not found");
 
     if (agent.isSuspended) {
-      throw new ForbiddenException("Your account has been suspended. Please contact support.");
+      throw new ForbiddenException(
+        "Your account has been suspended. Please contact support.",
+      );
     }
 
     // PRO and AGENCY plans have no listing cap.
