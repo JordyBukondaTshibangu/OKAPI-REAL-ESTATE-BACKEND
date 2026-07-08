@@ -14,6 +14,19 @@ enum AgentVerificationTier {
   PARTENAIRE_CONFIANCE
 }
 
+enum AgentType {
+  COMMISSIONNAIRE
+  AGENT
+  AGENCY_OWNER
+  OTHER
+}
+
+enum RentalFocus {
+  LONG_TERM
+  SHORT_TERM
+  BOTH
+}
+
 // Monetisation plan — determines listing cap and feature access.
 // FREE agents get unlimited listings during graceEndsAt, then capped at 10.
 // PRO and AGENCY are unlocked manually by an admin after payment confirmation.
@@ -79,27 +92,41 @@ model User {
 model Agency {
   id              String   @id @default(uuid())
   name            String
-  monogram        String
-  accentClass     String
-  tagline         String
-  description     String
-  address         String
-  phone           String
+  // --- Legacy cosmetic fields (kept for backward compat, not used in new forms) ---
+  monogram        String?
+  accentClass     String?
+  tagline         String?
+  // --- Core contact ---
   email           String
+  phone           String
+  whatsapp        String?
   website         String?
-  founded         Int
+  // --- Location & activity ---
+  address         String?
+  founded         Int?
+  description     String?
+  // New DRC-specific multi-selects
+  communes        String[]    @default([])
+  propertyTypes   String[]    @default([])
+  rentalFocus     RentalFocus @default(BOTH)
+  // Legacy free-text arrays (kept, not used in new forms)
+  specializations String[]    @default([])
+  areasServed     String[]    @default([])
+  languages       String[]    @default([])
+  certifications  String[]    @default([])
+  // --- Verification ---
+  rccmNumber         String?
+  verificationDocUrl String?   // private — never expose publicly
+  logoUrl            String?   // public logo
+  // --- Freemium ---
+  gracePeriodEndsAt DateTime @default(dbgenerated("now() + interval '6 months'"))
+  freeListingCap    Int      @default(10)
+  // --- Cached counts ---
   agentCount      Int      @default(0)
   listingCount    Int      @default(0)
   closedDeals     Int      @default(0)
-  specializations String[]
-  areasServed     String[]
-  languages       String[]
-  certifications  String[]
 
   // --- Agency verification gate ---
-  // Heavier than the individual agent gate: an agency vouches for many
-  // agents at once, so it needs business proof + at least one already
-  // verified agent before it can fast-track its own staff.
   verificationStatus AgencyVerificationStatus @default(PENDING)
   businessProofUrl   String?
   approvedAt         DateTime?
@@ -142,6 +169,20 @@ model Agent {
   photoGradient    String  @default("from-slate-400 to-slate-600")
   agencyAccent     String  @default("")
   agencyMonogram   String  @default("")
+
+  // --- New profile fields (added in agent-profile-redesign) ---
+  agentType            AgentType   @default(COMMISSIONNAIRE)
+  // communes of operation in Kinshasa e.g. ["Gombe","Limete"]
+  communes             String[]    @default([])
+  // property types managed e.g. ["Appartements","Studios"]
+  propertyTypes        String[]    @default([])
+  rentalFocus          RentalFocus @default(LONG_TERM)
+  // Stored as a label string e.g. "1 à 3 ans" (replaces yearsExperience Int in new forms)
+  yearsExperienceLabel String?
+  // Agent or agency who referred this agent to the platform
+  referredById         String?
+  // Per-agent override for free listing cap (default 10)
+  freeListingCap       Int         @default(10)
 
   // --- Self-signup auth ---
   email            String?   @unique
@@ -303,6 +344,14 @@ model Property {
 
   viewCount       Int      @default(0)
   shareCount      Int      @default(0)
+
+  // Short-term rental fields
+  isShortTerm     Boolean   @default(false)
+  isLongTerm      Boolean   @default(false)
+  pricePerNight   Float?
+  minStayNights   Int?
+  maxStayNights   Int?
+  shortTermNotes  String?
 
   // Boost: paid placement — listing appears first in search until this date.
   boostedUntil    DateTime?

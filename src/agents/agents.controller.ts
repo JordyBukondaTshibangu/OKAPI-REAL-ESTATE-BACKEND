@@ -18,6 +18,7 @@ import { CreateAgentDto } from "./dto/create-agent.dto";
 import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
+import { UpdateMyAgencyDto } from "./dto/update-my-agency.dto";
 import { UpdatePhotoDto } from "./dto/update-photo.dto";
 
 interface AgentRequest {
@@ -40,6 +41,12 @@ export class AgentsController {
   @Patch("me")
   updateMyProfile(@Req() req: AgentRequest, @Body() dto: UpdateMyProfileDto) {
     return this.agentsService.updateMyProfile(req.user.agentId, dto);
+  }
+
+  @UseGuards(JwtAgentGuard)
+  @Patch("me/agency")
+  updateMyAgency(@Req() req: AgentRequest, @Body() dto: UpdateMyAgencyDto) {
+    return this.agentsService.updateMyAgency(req.user.agentId, dto);
   }
 
   @UseGuards(JwtAgentGuard)

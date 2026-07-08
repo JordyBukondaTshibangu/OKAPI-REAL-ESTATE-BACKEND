@@ -1,8 +1,9 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
-  TooManyRequestsException,
   UnauthorizedException,
 } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
@@ -10,6 +11,7 @@ import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import { MailService } from "../../mail/mail.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { CompleteAgentProfileDto } from "./dto/complete-agent-profile.dto";
 import { ForgotPasswordAgentDto } from "./dto/forgot-password-agent.dto";
 import { LoginAgentDto } from "./dto/login-agent.dto";
 import { RegisterAgentDto } from "./dto/register-agent.dto";
@@ -70,9 +72,9 @@ export class AgentAuthService {
       },
     });
 
-    // Send OTP email in the background (don't await — registration should not
-    // fail if the mail provider is slow).
-    this.mail.sendAgentEmailOtp(agent.email!, agent.name, code).catch(() => {});
+    // Await in dev so SMTP errors surface immediately in the terminal.
+    // In production you may want to fire-and-forget once SMTP is confirmed working.
+    await this.mail.sendAgentEmailOtp(agent.email!, agent.name, code);
 
     return {
       access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
@@ -101,6 +103,8 @@ export class AgentAuthService {
     const valid = await bcrypt.compare(dto.password, agent.passwordHash);
     if (!valid) throw new UnauthorizedException("Invalid credentials");
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const a = agent as any;
     return {
       access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
       agent: {
@@ -109,6 +113,8 @@ export class AgentAuthService {
         email: agent.email,
         verificationTier: agent.verificationTier,
         emailVerified: agent.emailVerified,
+        agentType: a.agentType ?? null,
+        agencyId: a.agencyId ?? null,
       },
     };
   }
@@ -135,8 +141,9 @@ export class AgentAuthService {
     if (agent.emailOtpExpiry) {
       const ageMs = 10 * 60 * 1000 - (agent.emailOtpExpiry.getTime() - Date.now());
       if (ageMs < 60_000) {
-        throw new TooManyRequestsException(
+        throw new HttpException(
           "Please wait 60 seconds before requesting a new code",
+          HttpStatus.TOO_MANY_REQUESTS,
         );
       }
     }
@@ -215,6 +222,39 @@ export class AgentAuthService {
         "You will be notified once an admin approves your account.",
       emailVerified: true,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Step 2: Complete professional profile (after email verification)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Saves the professional profile data collected in Step 2 of self-signup.
+   * Can be called any time after registration (the agent may finish later).
+   */
+  async completeProfile(agentId: string, dto: CompleteAgentProfileDto) {
+    const agent = await this.prisma.agent.findUnique({ where: { id: agentId } });
+    if (!agent) throw new UnauthorizedException("Agent not found");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this.prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        agentType:            dto.agentType,
+        whatsappNumber:       dto.whatsapp ?? agent.phoneNumber, // default to phone
+        agencyId:             dto.agencyId ?? (agent as any).agencyId,
+        communes:             dto.communes,
+        propertyTypes:        dto.propertyTypes,
+        rentalFocus:          dto.rentalFocus,
+        yearsExperienceLabel: dto.yearsExperienceLabel,
+        idDocumentUrl:        dto.idDocumentUrl,
+        referredById:         dto.referredById,
+        bio:                  dto.bio ?? agent.bio,
+        photo:                dto.photo ?? agent.photo,
+      } as any,
+    });
+
+    return { message: "Profile updated successfully." };
   }
 
   // ---------------------------------------------------------------------------

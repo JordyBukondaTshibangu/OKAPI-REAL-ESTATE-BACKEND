@@ -65,14 +65,34 @@ export class AgenciesService {
     // Agencies created directly by Admin are pre-vetted out of band, same
     // reasoning as Agent.create() — they don't need to go through the
     // self-service business-proof gate built for agency self-registration.
-    return this.prisma.agency.create({
-      data: { ...dto, verificationStatus: "APPROVED", approvedAt: new Date() },
-    });
+    //
+    // Strip undefined values before spreading into Prisma — optional DTO fields
+    // are typed as `string | undefined` but Prisma optional string fields expect
+    // `string | null`. Omitting the key entirely satisfies both.
+    const payload = {
+      ...dto,
+      verificationStatus: "APPROVED" as const,
+      approvedAt: new Date(),
+      // Convert date-only string (e.g. "2026-10-29") to a full Date object
+      gracePeriodEndsAt: dto.gracePeriodEndsAt ? new Date(dto.gracePeriodEndsAt) : undefined,
+    };
+    const clean = Object.fromEntries(
+      Object.entries(payload).filter(([, v]) => v !== undefined),
+    ) as unknown as Parameters<typeof this.prisma.agency.create>[0]["data"];
+
+    return this.prisma.agency.create({ data: clean });
   }
 
   async update(id: string, dto: UpdateAgencyDto) {
     await this.findOne(id);
-    return this.prisma.agency.update({ where: { id }, data: dto });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = {
+      ...dto,
+      gracePeriodEndsAt: (dto as any).gracePeriodEndsAt
+        ? new Date((dto as any).gracePeriodEndsAt)
+        : undefined,
+    };
+    return this.prisma.agency.update({ where: { id }, data });
   }
 
   async remove(id: string) {

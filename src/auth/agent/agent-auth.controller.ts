@@ -1,7 +1,8 @@
-import { Body, Controller, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Patch, Post, Req, UseGuards } from "@nestjs/common";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
-import { JwtAgentGuard } from "../../guards/jwt-agent.guard";
+import { JwtAgentGuard } from "../guards/jwt-agent.guard";
 import { AgentAuthService } from "./agent-auth.service";
+import { CompleteAgentProfileDto } from "./dto/complete-agent-profile.dto";
 import { ForgotPasswordAgentDto } from "./dto/forgot-password-agent.dto";
 import { LoginAgentDto } from "./dto/login-agent.dto";
 import { RegisterAgentDto } from "./dto/register-agent.dto";
@@ -57,6 +58,17 @@ export class AgentAuthController {
   @Post("verify-email")
   verifyEmail(@Req() req: AgentRequest, @Body() dto: VerifyEmailDto) {
     return this.agentAuthService.verifyEmail(req.user.agentId, dto.code);
+  }
+
+  /**
+   * Step 2 of self-signup: save professional profile after email verification.
+   * Can also be called later to update the profile.
+   */
+  @ApiOperation({ summary: "Complete professional profile (Step 2 of self-signup)" })
+  @UseGuards(JwtAgentGuard)
+  @Patch("complete-profile")
+  completeProfile(@Req() req: AgentRequest, @Body() dto: CompleteAgentProfileDto) {
+    return this.agentAuthService.completeProfile(req.user.agentId, dto);
   }
 
   @ApiOperation({ summary: "Request a password reset email" })

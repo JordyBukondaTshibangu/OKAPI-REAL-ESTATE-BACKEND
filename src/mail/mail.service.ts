@@ -64,18 +64,26 @@ export class MailService {
         pass: process.env.MAIL_PASS,
       },
     });
+
+    this.logger.log(
+      `MailService ready — host=${process.env.MAIL_HOST ?? "smtp.gmail.com"} ` +
+      `port=${process.env.MAIL_PORT ?? 587} ` +
+      `user=${process.env.MAIL_USER ?? "(not set)"}`,
+    );
   }
 
   private async send(to: string, subject: string, html: string) {
     try {
-      await this.transporter.sendMail({
+      const info = await this.transporter.sendMail({
         from: `"Okapi Real Estate" <${process.env.MAIL_USER}>`,
         to,
         subject,
         html,
       });
+      this.logger.log(`Email sent to ${to} — messageId: ${info.messageId}`);
     } catch (err) {
       this.logger.error(`Failed to send email to ${to} — subject: "${subject}"`, err);
+      throw err; // rethrow so callers know it failed
     }
   }
 
@@ -143,7 +151,7 @@ export class MailService {
   async sendAdminAgentPendingApproval(opts: {
     agentName: string;
     agentEmail: string;
-    agentPhone: string;
+    agentPhone: string | null;
     agentId: string;
   }) {
     const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL ?? process.env.MAIL_USER;
@@ -167,7 +175,7 @@ export class MailService {
         </tr>
         <tr style="background:#F2F4F7;">
           <td style="padding:10px 14px;font-weight:bold;">Phone</td>
-          <td style="padding:10px 14px;">${opts.agentPhone}</td>
+          <td style="padding:10px 14px;">${opts.agentPhone ?? "—"}</td>
         </tr>
       </table>
       <p style="text-align:center;margin:28px 0;">

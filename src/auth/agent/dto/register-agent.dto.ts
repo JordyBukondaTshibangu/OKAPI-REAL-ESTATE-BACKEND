@@ -1,12 +1,16 @@
 import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
+/** Step 1 of agent self-signup — account credentials only.
+ *  Professional profile fields (communes, agentType, etc.) are collected
+ *  in Step 2 via PATCH /auth/agent/complete-profile after email verification.
+ *  agencyId and whatsappNumber are optionally collected at registration so
+ *  agents signing up via an agency invite link can be pre-linked.
+ */
 export class RegisterAgentDto {
   @IsString() name: string;
-  /** Email is required — used to deliver the OTP verification code. */
   @IsEmail() email: string;
   @IsString() phoneNumber: string;
-  @IsOptional() @IsString() whatsappNumber?: string;
   @IsString() @MinLength(6) password: string;
-  /** Optional — agents can sign up independently and join/create an agency later. */
+  @IsOptional() @IsString() whatsappNumber?: string;
   @IsOptional() @IsString() agencyId?: string;
 }
