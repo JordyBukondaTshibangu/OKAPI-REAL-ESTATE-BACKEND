@@ -14,6 +14,16 @@ enum AgentVerificationTier {
   PARTENAIRE_CONFIANCE
 }
 
+// Listing lifecycle — controls visibility and agent workflow.
+enum ListingStatus {
+  DRAFT      // saved but not submitted
+  PENDING    // submitted, awaiting admin spot-check
+  LIVE       // approved and publicly visible
+  HIDDEN     // manually hidden by agent
+  REJECTED   // admin rejected — reason stored in rejectionReason
+  EXPIRED    // past expiresAt date
+}
+
 enum AgentType {
   COMMISSIONNAIRE
   AGENT
@@ -306,8 +316,19 @@ model Property {
   id              String   @id @default(uuid())
   agentId         String
   agent           Agent    @relation(fields: [agentId], references: [id])
-  agencyId        String
-  agency          Agency   @relation(fields: [agencyId], references: [id])
+  // Optional: independent agents submit without an agency
+  agencyId        String?
+  agency          Agency?  @relation(fields: [agencyId], references: [id])
+
+  // ── Listing lifecycle ──────────────────────────────────────────
+  status          ListingStatus @default(LIVE)
+  isPublished     Boolean       @default(true)
+  publishedAt     DateTime?
+  expiresAt       DateTime?
+  rejectionReason String?
+  flagCount       Int           @default(0)
+  whatsappClicks  Int           @default(0)
+  coverImageIndex Int           @default(0)
 
   listingType     String
   category        String
@@ -341,6 +362,8 @@ model Property {
   availableFrom   String?
   averagePriceArea Float?
   averageSizeArea  Float?
+  landmark        String?           // Point de repère (near school, market, etc.)
+  isFurnished     Boolean           @default(false)
 
   // --- Rental duration type ---
   // Two independent booleans so agents can tag a property as short-term,
