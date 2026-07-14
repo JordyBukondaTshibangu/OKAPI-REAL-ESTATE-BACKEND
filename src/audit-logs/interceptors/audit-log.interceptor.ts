@@ -37,7 +37,7 @@ export class AuditLogInterceptor implements NestInterceptor {
             : undefined;
 
         this.auditLogsService
-          .log({ adminId: user.sub, action, resource, resourceId, details })
+          .log({ adminId: user.adminId ?? user.sub, action, resource, resourceId, details })
           .catch((err) =>
             this.logger.error(
               `Audit log failed [${action} ${resource}]: ${err?.message}`,

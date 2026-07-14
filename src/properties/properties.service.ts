@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -85,7 +86,8 @@ export class PropertiesService {
     const order = sortOrder ?? "asc";
 
     const where = {
-      // Only surface listings from non-suspended agents.
+      // Only surface LIVE listings from non-suspended agents publicly.
+      status: "LIVE" as const,
       agent: { isSuspended: false },
       ...(search && {
         OR: [
@@ -187,9 +189,8 @@ export class PropertiesService {
   }
 
   /**
-   * Creates a property. For agent-submitted listings, enforces the FREE plan
-   * cap (10 active listings) once the grace period has expired.
-   * Admin-created listings bypass the cap entirely.
+   * Creates a property. For agent-submitted listings, starts as DRAFT.
+   * Admin-created listings are LIVE immediately.
    */
   async create(dto: CreatePropertyDto, agentId?: string) {
     // Enforce cap only for self-submitting agents (agentId provided).
@@ -197,7 +198,27 @@ export class PropertiesService {
       await this.enforceListingCap(agentId);
     }
 
-    const property = await this.prisma.property.create({ data: dto });
+    // Agent submissions start as DRAFT; admin posts go straight to LIVE.
+    const statusOverride = agentId
+      ? { status: "DRAFT" as const, isPublished: false }
+      : { status: "LIVE" as const, isPublished: true, publishedAt: new Date() };
+
+    const property = await this.prisma.property.create({
+      data: {
+        // Defaults for fields that admin sets but agents don't (safe for schema non-null)
+        imageGradient: "from-slate-700/80 to-slate-900/80",
+        iconType: dto.category ?? "apartment",
+        subtitle: dto.category ?? "Bien immobilier",
+        bedrooms: 0,
+        bathrooms: 0,
+        areaSqm: 0,
+        neighborhood: "",
+        gallery: [],
+        amenities: [],
+        ...dto,
+        ...statusOverride,
+      },
+    });
 
     // Gallery keys arrive as tmp/ uploads (see UploadsService.createPresignedUploads).
     // Now that we have a property id, move them to a permanent properties/{id}/
@@ -450,5 +471,157 @@ export class PropertiesService {
     await this.findOne(id);
     await this.prisma.property.delete({ where: { id } });
     return { message: "Property deleted" };
+  }
+
+  // ── Agent self-service: listing lifecycle ─────────────────────────────────
+
+  /** Agent's own listings — all statuses, ordered by newest first. */
+  async findMine(agentId: string, status?: string) {
+    const where: object = {
+      agentId,
+      ...(status && { status }),
+    };
+    const data = await this.prisma.property.findMany({
+      where,
+      orderBy: [
+        { boostedUntil: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
+      include: { agency: true, _count: { select: { favorites: true } } },
+    });
+    return data.map((p) => ({
+      ...this.withPerformance(this.withGalleryUrls(p)),
+      isBoosted: p.boostedUntil != null && p.boostedUntil > new Date(),
+    }));
+  }
+
+  /** Agent edits their own listing (only DRAFT, HIDDEN, or REJECTED can be edited freely). */
+  async updateMine(id: string, agentId: string, dto: UpdatePropertyDto) {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+    if (!property) throw new NotFoundException("Property not found");
+    if (property.agentId !== agentId)
+      throw new ForbiddenException("Access denied");
+
+    // Promote any new tmp/ gallery keys the agent uploaded (same as in create())
+    let galleryKeys = dto.gallery ?? property.gallery;
+    const tmpKeys = galleryKeys.filter((k: string) => k.startsWith("tmp/"));
+    if (tmpKeys.length > 0) {
+      try {
+        const permanentKeys = await this.uploads.promoteKeys(tmpKeys, id);
+        galleryKeys = galleryKeys.map((k: string) => {
+          const idx = tmpKeys.indexOf(k);
+          return idx >= 0 ? permanentKeys[idx] : k;
+        });
+      } catch (err) {
+        this.logger.error("Gallery promotion failed on updateMine", err);
+      }
+    }
+
+    const updated = await this.prisma.property.update({
+      where: { id },
+      data: { ...dto, gallery: galleryKeys },
+      include: { _count: { select: { favorites: true } } },
+    });
+    return this.withPerformance(this.withGalleryUrls(updated));
+  }
+
+  /** Agent deletes their own listing (only DRAFT or HIDDEN). */
+  async removeMine(id: string, agentId: string) {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+    if (!property) throw new NotFoundException("Property not found");
+    if (property.agentId !== agentId)
+      throw new ForbiddenException("Access denied");
+    await this.prisma.property.delete({ where: { id } });
+    return { message: "Listing deleted" };
+  }
+
+  /** DRAFT / HIDDEN / REJECTED → PENDING (submitted for admin review). */
+  async publishMine(id: string, agentId: string) {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+    if (!property) throw new NotFoundException("Property not found");
+    if (property.agentId !== agentId)
+      throw new ForbiddenException("Access denied");
+    if (!["DRAFT", "HIDDEN", "REJECTED"].includes(property.status))
+      throw new BadRequestException(`Cannot submit a listing with status ${property.status}`);
+
+    return this.prisma.property.update({
+      where: { id },
+      data: { status: "PENDING", isPublished: false },
+    });
+  }
+
+  /** LIVE → HIDDEN (agent manually hides their listing). */
+  async unpublishMine(id: string, agentId: string) {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+    if (!property) throw new NotFoundException("Property not found");
+    if (property.agentId !== agentId)
+      throw new ForbiddenException("Access denied");
+    if (property.status !== "LIVE")
+      throw new BadRequestException("Only LIVE listings can be unpublished");
+
+    return this.prisma.property.update({
+      where: { id },
+      data: { status: "HIDDEN", isPublished: false },
+    });
+  }
+
+  // ── Admin review actions ──────────────────────────────────────────────────
+
+  /** Returns all PENDING listings for admin review. */
+  async findPending() {
+    const data = await this.prisma.property.findMany({
+      where: { status: "PENDING" },
+      orderBy: { createdAt: "asc" },
+      include: { agent: true, agency: true, _count: { select: { favorites: true } } },
+    });
+    return data.map((p) => this.withPerformance(this.withGalleryUrls(p)));
+  }
+
+  /** Admin approves a PENDING listing → LIVE. */
+  async approve(id: string) {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+    if (!property) throw new NotFoundException("Property not found");
+    if (property.status !== "PENDING")
+      throw new BadRequestException("Only PENDING listings can be approved");
+
+    const now = new Date();
+    const expiresAt = new Date(now);
+    expiresAt.setDate(expiresAt.getDate() + 90); // 90-day listing duration
+
+    return this.prisma.property.update({
+      where: { id },
+      data: {
+        status: "LIVE",
+        isPublished: true,
+        publishedAt: now,
+        expiresAt,
+        rejectionReason: null,
+      },
+    });
+  }
+
+  /** Admin rejects a PENDING listing with a reason. */
+  async reject(id: string, reason: string) {
+    const property = await this.prisma.property.findUnique({ where: { id } });
+    if (!property) throw new NotFoundException("Property not found");
+    if (property.status !== "PENDING")
+      throw new BadRequestException("Only PENDING listings can be rejected");
+
+    return this.prisma.property.update({
+      where: { id },
+      data: {
+        status: "REJECTED",
+        isPublished: false,
+        rejectionReason: reason ?? "Non conforme",
+      },
+    });
+  }
+
+  /** Auto-submit all DRAFT listings for an agent when they get approved (called from agents service). */
+  async autoSubmitDrafts(agentId: string) {
+    return this.prisma.property.updateMany({
+      where: { agentId, status: "DRAFT" },
+      data: { status: "PENDING" },
+    });
   }
 }
