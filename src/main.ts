@@ -7,9 +7,13 @@ import { join } from "path";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
+  console.log("[boot] starting, cwd =", process.cwd(), "PORT =", process.env.PORT);
+
   mkdirSync(join(process.cwd(), "uploads", "avatars"), { recursive: true });
+  console.log("[boot] uploads dir ready");
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  console.log("[boot] Nest app created");
 
   app.useStaticAssets(join(process.cwd(), "uploads"), { prefix: "/uploads" });
 
@@ -22,6 +26,7 @@ async function bootstrap() {
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup("api", app, documentFactory);
+  console.log("[boot] swagger set up");
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.enableCors({
@@ -31,6 +36,10 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
+  await app.listen(process.env.PORT ?? 8080, "0.0.0.0");
+  console.log("[boot] listening on", process.env.PORT ?? 8080);
 }
-bootstrap();
+bootstrap().catch((err) => {
+  console.error("[boot] fatal error during bootstrap:", err);
+  process.exit(1);
+});

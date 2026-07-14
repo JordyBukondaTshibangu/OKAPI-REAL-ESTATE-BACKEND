@@ -15,6 +15,7 @@ export class AuditLogsService {
   constructor(private prisma: PrismaService) {}
 
   async log(data: LogData) {
+    if (!data.adminId) return; // skip if caller has no resolved admin ID
     await this.prisma.auditLog.create({ data });
   }
 

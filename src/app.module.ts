@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AgenciesModule } from "./agencies/agencies.module";
+import { AgentVerificationModule } from "./agent-verification/agent-verification.module";
 import { AgentsModule } from "./agents/agents.module";
 import { AlertsModule } from "./alerts/alerts.module";
 import { AuditLogsModule } from "./audit-logs/audit-logs.module";
@@ -12,6 +13,7 @@ import { MailModule } from "./mail/mail.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { PropertiesModule } from "./properties/properties.module";
 import { ReviewsModule } from "./reviews/reviews.module";
+import { UploadsModule } from "./uploads/uploads.module";
 import { UsersModule } from "./users/users.module";
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -25,12 +27,14 @@ import { AppService } from './app.service';
     UsersModule,
     AgenciesModule,
     AgentsModule,
+    AgentVerificationModule,
     PropertiesModule,
     FavoritesModule,
     EnquiriesModule,
     AlertsModule,
     ReviewsModule,
     AuditLogsModule,
+    UploadsModule,
   ],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard,  }],
   controllers: [AppController],  // ← add this

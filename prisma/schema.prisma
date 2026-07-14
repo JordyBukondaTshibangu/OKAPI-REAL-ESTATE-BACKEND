@@ -8,6 +8,69 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum AgentVerificationTier {
+  NON_VERIFIE
+  VERIFIE
+  PARTENAIRE_CONFIANCE
+}
+
+// Listing lifecycle — controls visibility and agent workflow.
+enum ListingStatus {
+  DRAFT      // saved but not submitted
+  PENDING    // submitted, awaiting admin spot-check
+  LIVE       // approved and publicly visible
+  HIDDEN     // manually hidden by agent
+  REJECTED   // admin rejected — reason stored in rejectionReason
+  EXPIRED    // past expiresAt date
+}
+
+enum AgentType {
+  COMMISSIONNAIRE
+  AGENT
+  AGENCY_OWNER
+  OTHER
+}
+
+enum RentalFocus {
+  LONG_TERM
+  SHORT_TERM
+  BOTH
+}
+
+// Monetisation plan — determines listing cap and feature access.
+// FREE agents get unlimited listings during graceEndsAt, then capped at 10.
+// PRO and AGENCY are unlocked manually by an admin after payment confirmation.
+enum AgentPlan {
+  FREE
+  PRO
+  AGENCY
+}
+
+enum DocumentReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReferenceType {
+  AGENT
+  AGENCY
+  COMMISSIONNAIRE
+}
+
+enum ReferenceStatus {
+  PENDING
+  CONFIRMED
+  REVOKED
+  FLAGGED
+}
+
+enum AgencyVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Admin {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -33,59 +96,137 @@ model User {
   enquiries  Enquiry[]
   alerts     Alert[]
   reviews    Review[]
+  complaintsFiled AgentComplaint[]
 }
 
 model Agency {
   id              String   @id @default(uuid())
   name            String
-  monogram        String
-  accentClass     String
-  tagline         String
-  description     String
-  address         String
-  phone           String
+  // --- Legacy cosmetic fields (kept for backward compat, not used in new forms) ---
+  monogram        String?
+  accentClass     String?
+  tagline         String?
+  // --- Core contact ---
   email           String
+  phone           String
+  whatsapp        String?
   website         String?
-  founded         Int
+  // --- Location & activity ---
+  address         String?
+  founded         Int?
+  description     String?
+  // New DRC-specific multi-selects
+  communes        String[]    @default([])
+  propertyTypes   String[]    @default([])
+  rentalFocus     RentalFocus @default(BOTH)
+  // Legacy free-text arrays (kept, not used in new forms)
+  specializations String[]    @default([])
+  areasServed     String[]    @default([])
+  languages       String[]    @default([])
+  certifications  String[]    @default([])
+  // --- Verification ---
+  rccmNumber         String?
+  verificationDocUrl String?   // private — never expose publicly
+  logoUrl            String?   // public logo
+  // --- Freemium ---
+  gracePeriodEndsAt DateTime @default(dbgenerated("now() + interval '6 months'"))
+  freeListingCap    Int      @default(10)
+  // --- Cached counts ---
   agentCount      Int      @default(0)
   listingCount    Int      @default(0)
   closedDeals     Int      @default(0)
-  specializations String[]
-  areasServed     String[]
-  languages       String[]
-  certifications  String[]
+
+  // --- Agency verification gate ---
+  verificationStatus AgencyVerificationStatus @default(PENDING)
+  businessProofUrl   String?
+  approvedAt         DateTime?
+  standingFlagged    Boolean                  @default(false)
 
   createdAt   DateTime @default(now())
 
   agents     Agent[]
   properties Property[]
+  vouchesGiven AgentReference[]
 }
 
 model Agent {
   id               String  @id @default(uuid())
-  agencyId         String
-  agency           Agency  @relation(fields: [agencyId], references: [id])
+  // Independent agents (not yet affiliated with an agency) are allowed —
+  // agency affiliation is optional, matching the tiered trust model where
+  // agency approval is a separate, heavier gate above individual agents.
+  agencyId         String?
+  agency           Agency? @relation(fields: [agencyId], references: [id], onDelete: SetNull)
 
   name             String
-  title            String
-  specialization   String
-  nationality      String
-  languages        String[]
-  yearsExperience  Int
-  experienceSince  Int
-  rating           Float
-  ratingsCount     Int
-  responseMinutes  Int
-  brokerLicense    String
+  title            String  @default("Agent")
+  specialization   String  @default("")
+  nationality      String  @default("")
+  languages        String[] @default([])
+  yearsExperience  Int     @default(0)
+  experienceSince  Int     @default(0)
+  rating           Float   @default(0)
+  ratingsCount     Int     @default(0)
+  responseMinutes  Int     @default(0)
+  // Not every agent has a formal license (e.g. an unlicensed commissionnaire),
+  // so this is no longer mandatory at signup time.
+  brokerLicense    String?
   forSaleCount     Int     @default(0)
   forRentCount     Int     @default(0)
   closedDeals      Int     @default(0)
   totalDealsValueUsd Float @default(0)
-  bio              String
-  photo            String
-  photoGradient    String
-  agencyAccent     String
-  agencyMonogram   String
+  bio              String  @default("")
+  photo            String  @default("")
+  photoGradient    String  @default("from-slate-400 to-slate-600")
+  agencyAccent     String  @default("")
+  agencyMonogram   String  @default("")
+
+  // --- New profile fields (added in agent-profile-redesign) ---
+  agentType            AgentType   @default(COMMISSIONNAIRE)
+  // communes of operation in Kinshasa e.g. ["Gombe","Limete"]
+  communes             String[]    @default([])
+  // property types managed e.g. ["Appartements","Studios"]
+  propertyTypes        String[]    @default([])
+  rentalFocus          RentalFocus @default(LONG_TERM)
+  // Stored as a label string e.g. "1 à 3 ans" (replaces yearsExperience Int in new forms)
+  yearsExperienceLabel String?
+  // Agent or agency who referred this agent to the platform
+  referredById         String?
+  // Per-agent override for free listing cap (default 10)
+  freeListingCap       Int         @default(10)
+
+  // --- Self-signup auth ---
+  email            String?   @unique
+  passwordHash     String?
+  phoneNumber      String?   @unique
+  whatsappNumber   String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  // --- Email OTP verification (self-signup flow) ---
+  emailVerified  Boolean   @default(false)
+  emailOtpCode   String?
+  emailOtpExpiry DateTime?
+
+  // --- Monetisation plan ---
+  plan         AgentPlan @default(FREE)
+  // Grace period: unlimited listings until this date, then capped at 10 for FREE.
+  // Set to now() + 6 months on signup. Existing agents are backfilled.
+  graceEndsAt  DateTime  @default(dbgenerated("now() + interval '6 months'"))
+  // Whether the agent has been manually suspended by an admin.
+  isSuspended     Boolean   @default(false)
+  suspendedAt     DateTime?
+  suspendedReason String?
+
+  // --- Tiered trust / verification ---
+  verificationTier    AgentVerificationTier @default(NON_VERIFIE)
+  idDocumentUrl        String?
+  idDocumentStatus     DocumentReviewStatus  @default(PENDING)
+  firstListingChecked  Boolean               @default(false)
+  verifiedAt           DateTime?
+  partnerSince         DateTime?
+  lastTierCheckedAt    DateTime?
+  complaintCount       Int                   @default(0)
+  flagged              Boolean               @default(false)
 
   createdAt        DateTime @default(now())
 
@@ -93,6 +234,55 @@ model Agent {
   areasOfExpertise AreaOfExpertise[]
   trackRecord      TrackRecord[]
   reviews          Review[]
+
+  referencesReceived AgentReference[] @relation("ReferenceReceiver")
+  referencesGiven    AgentReference[] @relation("ReferenceGiver")
+  complaints         AgentComplaint[]
+}
+
+// A "vouch": records who is endorsing a given agent during the
+// Non-vérifié -> Vérifié step (a verified agent, an approved agency, or a
+// named commissionnaire outside the platform). Kept as an internal scoring
+// signal — not exposed in public API responses.
+model AgentReference {
+  id   String        @id @default(uuid())
+  type ReferenceType
+
+  agentId String
+  agent   Agent  @relation("ReferenceReceiver", fields: [agentId], references: [id], onDelete: Cascade)
+
+  voucherAgentId  String?
+  voucherAgent    Agent?  @relation("ReferenceGiver", fields: [voucherAgentId], references: [id], onDelete: SetNull)
+  voucherAgencyId String?
+  voucherAgency   Agency? @relation(fields: [voucherAgencyId], references: [id], onDelete: SetNull)
+  // Fallback for references that don't map to a platform account yet,
+  // e.g. an external commissionnaire vouching by name/phone.
+  voucherName    String?
+  voucherContact String?
+
+  status ReferenceStatus @default(PENDING)
+  note   String?
+
+  reviewedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// A complaint filed by a site visitor against an agent. Crossing the
+// threshold flags the agent (and their agency) for re-review — this is
+// the only ongoing manual workload once an agent reaches Tier 2+.
+model AgentComplaint {
+  id      String @id @default(uuid())
+  agentId String
+  agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  reporterUserId String?
+  reporterUser   User?   @relation(fields: [reporterUserId], references: [id], onDelete: SetNull)
+
+  reason  String
+  details String?
+  status  String  @default("open")
+
+  createdAt DateTime @default(now())
 }
 
 model AreaOfExpertise {
@@ -126,8 +316,19 @@ model Property {
   id              String   @id @default(uuid())
   agentId         String
   agent           Agent    @relation(fields: [agentId], references: [id])
-  agencyId        String
-  agency          Agency   @relation(fields: [agencyId], references: [id])
+  // Optional: independent agents submit without an agency
+  agencyId        String?
+  agency          Agency?  @relation(fields: [agencyId], references: [id])
+
+  // ── Listing lifecycle ──────────────────────────────────────────
+  status          ListingStatus @default(LIVE)
+  isPublished     Boolean       @default(true)
+  publishedAt     DateTime?
+  expiresAt       DateTime?
+  rejectionReason String?
+  flagCount       Int           @default(0)
+  whatsappClicks  Int           @default(0)
+  coverImageIndex Int           @default(0)
 
   listingType     String
   category        String
@@ -161,6 +362,27 @@ model Property {
   availableFrom   String?
   averagePriceArea Float?
   averageSizeArea  Float?
+  landmark        String?           // Point de repère (near school, market, etc.)
+  isFurnished     Boolean           @default(false)
+
+  // --- Rental duration type ---
+  // Two independent booleans so agents can tag a property as short-term,
+  // long-term, or both. All false = unspecified (treated as long-term by clients).
+  isShortTerm     Boolean  @default(false)
+  isLongTerm      Boolean  @default(true)
+
+  // Short-term optional details (only meaningful when isShortTerm = true).
+  // Not enforced — agents fill these in for buyer convenience; contact stays WhatsApp-based.
+  pricePerNight   Float?
+  minStayNights   Int?
+  maxStayNights   Int?
+  shortTermNotes  String?
+
+  viewCount       Int      @default(0)
+  shareCount      Int      @default(0)
+
+  // Boost: paid placement — listing appears first in search until this date.
+  boostedUntil    DateTime?
 
   createdAt       DateTime @default(now())
 

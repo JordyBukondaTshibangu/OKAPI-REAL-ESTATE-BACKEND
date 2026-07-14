@@ -48,4 +48,12 @@ prisma/*.db-journal
 *.pem
 
 # User uploads
-uploads/
+/uploads/
+
+CLAUDE.md
+./claude
+.claude
+/dist
+dist
+dist/
+.claudedist/
