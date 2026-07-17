@@ -71,17 +71,6 @@ export class AgentAuthController {
     return this.agentAuthService.completeProfile(req.user.agentId, dto);
   }
 
-  /** Change password while logged in (no email/token required). */
-  @ApiOperation({ summary: "Change password (authenticated)" })
-  @UseGuards(JwtAgentGuard)
-  @Patch("change-password")
-  changePassword(
-    @Req() req: AgentRequest,
-    @Body("newPassword") newPassword: string,
-  ) {
-    return this.agentAuthService.changePassword(req.user.agentId, newPassword);
-  }
-
   @ApiOperation({ summary: "Request a password reset email" })
   @Post("forgot-password")
   forgotPassword(@Body() dto: ForgotPasswordAgentDto) {

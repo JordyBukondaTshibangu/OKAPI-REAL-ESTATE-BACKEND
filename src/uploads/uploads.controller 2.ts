@@ -28,12 +28,4 @@ export class UploadsController {
     const [result] = await this.uploadsService.createPresignedUploads([dto]);
     return result;
   }
-
-  /** Agents upload their own profile photo via this endpoint. */
-  @UseGuards(JwtAgentGuard)
-  @Post("presign-agent-avatar")
-  async presignAgentAvatar(@Body() dto: PresignFileDto) {
-    const [result] = await this.uploadsService.createPresignedUploads([dto]);
-    return result;
-  }
 }

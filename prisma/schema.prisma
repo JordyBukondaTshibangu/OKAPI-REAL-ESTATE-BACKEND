@@ -386,9 +386,27 @@ model Property {
 
   createdAt       DateTime @default(now())
 
-  favorites  Favorite[]
-  enquiries  Enquiry[]
-  reviews    Review[]
+  favorites     Favorite[]
+  enquiries     Enquiry[]
+  reviews       Review[]
+  interactions  PropertyInteraction[]
+}
+
+model PropertyInteraction {
+  id         String   @id @default(cuid())
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// Logged-in agent/user id — null for anonymous visitors
+  userId     String?
+  /// Anonymous browser/device session UUID — null when userId is set
+  sessionId  String?
+  /// "view" | "share" | "whatsapp"
+  action     String
+  createdAt  DateTime @default(now())
+
+  @@unique([propertyId, userId, action])
+  @@index([propertyId, sessionId, action])
+  @@index([propertyId, action])
 }
 
 model Favorite {

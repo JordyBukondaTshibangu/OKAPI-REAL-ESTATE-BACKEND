@@ -292,19 +292,6 @@ export class AgentAuthService {
     return { message: "Password reset successful" };
   }
 
-  /** Change the logged-in agent's password (requires current token). */
-  async changePassword(agentId: string, newPassword: string) {
-    if (!newPassword || newPassword.length < 8) {
-      throw new BadRequestException("Password must be at least 8 characters");
-    }
-    const passwordHash = await bcrypt.hash(newPassword, 10);
-    await this.prisma.agent.update({
-      where: { id: agentId },
-      data: { passwordHash },
-    });
-    return { message: "Password updated successfully" };
-  }
-
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------

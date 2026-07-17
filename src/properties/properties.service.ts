@@ -38,21 +38,23 @@ export class PropertiesService {
     };
   }
 
-  /** Reshapes raw view/share counters and the favorites relation into a `performance` summary. */
+  /** Reshapes raw view/share/whatsapp counters and the favorites relation into a `performance` summary. */
   private withPerformance<
     T extends {
       viewCount: number;
       shareCount: number;
+      whatsappClicks: number;
       _count?: { favorites: number };
     },
   >(property: T) {
-    const { viewCount, shareCount, _count, ...rest } = property;
+    const { viewCount, shareCount, whatsappClicks, _count, ...rest } = property;
     return {
       ...rest,
       performance: {
         viewed: viewCount,
         shared: shareCount,
         saved: _count?.favorites ?? 0,
+        whatsappClicks,
       },
     };
   }
@@ -445,25 +447,92 @@ export class PropertiesService {
     return this.withPerformance(this.withGalleryUrls(property));
   }
 
-  /** Records a property view (e.g. when a visitor opens the property detail page). */
-  async recordView(id: string) {
+  /**
+   * Returns true if this is the first time this identity (userId or sessionId)
+   * performs `action` on this property, and records the interaction.
+   * Returns false if already seen — caller should skip the increment.
+   * Falls back to always-true when no identity is supplied (legacy / tests).
+   */
+  private async tryInteract(
+    propertyId: string,
+    action: string,
+    userId?: string,
+    sessionId?: string,
+  ): Promise<boolean> {
+    if (userId) {
+      // Logged-in user: one interaction per (property, user, action) ever
+      const existing = await this.prisma.propertyInteraction.findFirst({
+        where: { propertyId, userId, action },
+      });
+      if (existing) return false;
+      await this.prisma.propertyInteraction.create({
+        data: { propertyId, userId, action },
+      });
+      return true;
+    }
+    if (sessionId) {
+      // Anonymous visitor: one interaction per (property, session, action) ever
+      const existing = await this.prisma.propertyInteraction.findFirst({
+        where: { propertyId, sessionId, action },
+      });
+      if (existing) return false;
+      await this.prisma.propertyInteraction.create({
+        data: { propertyId, sessionId, action },
+      });
+      return true;
+    }
+    // No identity — always count (fallback for internal calls / tests)
+    return true;
+  }
+
+  /** Records a property view. Deduplicates per user or anonymous session. */
+  async recordView(id: string, userId?: string, sessionId?: string) {
     await this.findOne(id);
-    const property = await this.prisma.property.update({
-      where: { id },
-      data: { viewCount: { increment: 1 } },
-      include: { _count: { select: { favorites: true } } },
-    });
+    const shouldCount = await this.tryInteract(id, 'view', userId, sessionId);
+    const property = shouldCount
+      ? await this.prisma.property.update({
+          where: { id },
+          data: { viewCount: { increment: 1 } },
+          include: { _count: { select: { favorites: true } } },
+        })
+      : await this.prisma.property.findUniqueOrThrow({
+          where: { id },
+          include: { _count: { select: { favorites: true } } },
+        });
     return this.withPerformance(property).performance;
   }
 
-  /** Records a property share (e.g. when a visitor uses the share button). */
-  async recordShare(id: string) {
+  /** Records a share. Deduplicates per user or anonymous session. */
+  async recordShare(id: string, userId?: string, sessionId?: string) {
     await this.findOne(id);
-    const property = await this.prisma.property.update({
-      where: { id },
-      data: { shareCount: { increment: 1 } },
-      include: { _count: { select: { favorites: true } } },
-    });
+    const shouldCount = await this.tryInteract(id, 'share', userId, sessionId);
+    const property = shouldCount
+      ? await this.prisma.property.update({
+          where: { id },
+          data: { shareCount: { increment: 1 } },
+          include: { _count: { select: { favorites: true } } },
+        })
+      : await this.prisma.property.findUniqueOrThrow({
+          where: { id },
+          include: { _count: { select: { favorites: true } } },
+        });
+    return this.withPerformance(property).performance;
+  }
+
+  /** Records a WhatsApp tap — the #1 engagement signal. Deduplicates per user or session. */
+  async recordWhatsAppClick(id: string, userId?: string, sessionId?: string) {
+    await this.findOne(id);
+    const shouldCount = await this.tryInteract(id, 'whatsapp', userId, sessionId);
+    const property = shouldCount
+      ? await this.prisma.property.update({
+          where: { id },
+          data: { whatsappClicks: { increment: 1 } },
+          include: { _count: { select: { favorites: true } } },
+        })
+      : await this.prisma.property.findUniqueOrThrow({
+          where: { id },
+          include: { _count: { select: { favorites: true } } },
+        });
     return this.withPerformance(property).performance;
   }
 

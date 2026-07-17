@@ -1,8 +1,7 @@
-import { Injectable, OnModuleInit } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import {
   CopyObjectCommand,
   DeleteObjectsCommand,
-  PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -18,7 +17,7 @@ export function toR2Url(key: string): string {
 const PRESIGN_TTL_SECONDS = 5 * 60;
 
 @Injectable()
-export class UploadsService implements OnModuleInit {
+export class UploadsService {
   private readonly client: S3Client;
   private readonly bucket: string;
 
@@ -31,45 +30,7 @@ export class UploadsService implements OnModuleInit {
         accessKeyId: process.env.R2_ACCESS_KEY_ID ?? "",
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY ?? "",
       },
-      // Disable automatic CRC32 checksum injection so presigned PUT URLs don't
-      // include x-amz-checksum-* query params that trigger CORS preflight issues.
-      requestChecksumCalculation: "when_required" as any,
-      responseChecksumValidation: "when_required" as any,
     });
-  }
-
-  /** Configure R2 bucket CORS on startup so browser PUT uploads work cross-origin. */
-  async onModuleInit() {
-    const raw = process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL ?? "";
-    const origins = raw
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    // Allow all origins when none are configured (dev mode).
-    const allowedOrigins = origins.length > 0 ? origins : ["*"];
-
-    try {
-      await this.client.send(
-        new PutBucketCorsCommand({
-          Bucket: this.bucket,
-          CORSConfiguration: {
-            CORSRules: [
-              {
-                AllowedOrigins: allowedOrigins,
-                AllowedMethods: ["GET", "PUT", "POST", "DELETE", "HEAD"],
-                AllowedHeaders: ["*"],
-                ExposeHeaders: ["ETag"],
-                MaxAgeSeconds: 3600,
-              },
-            ],
-          },
-        }),
-      );
-      console.log("[R2 CORS] Rules applied for origins:", allowedOrigins);
-    } catch (err: any) {
-      // Log but don't crash the app — CORS may already be set via the dashboard.
-      console.warn("[R2 CORS] Could not apply CORS rules:", err?.message ?? err);
-    }
   }
 
   async createPresignedUploads(files: PresignFileDto[]) {

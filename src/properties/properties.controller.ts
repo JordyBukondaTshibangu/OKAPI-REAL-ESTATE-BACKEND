@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -42,14 +43,32 @@ export class PropertiesController {
 
   @HttpCode(HttpStatus.OK)
   @Post(":id/view")
-  recordView(@Param("id") id: string) {
-    return this.propertiesService.recordView(id);
+  recordView(
+    @Param("id") id: string,
+    @Headers("x-user-id") userId?: string,
+    @Headers("x-session-id") sessionId?: string,
+  ) {
+    return this.propertiesService.recordView(id, userId || undefined, sessionId || undefined);
   }
 
   @HttpCode(HttpStatus.OK)
   @Post(":id/share")
-  recordShare(@Param("id") id: string) {
-    return this.propertiesService.recordShare(id);
+  recordShare(
+    @Param("id") id: string,
+    @Headers("x-user-id") userId?: string,
+    @Headers("x-session-id") sessionId?: string,
+  ) {
+    return this.propertiesService.recordShare(id, userId || undefined, sessionId || undefined);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post(":id/whatsapp-click")
+  recordWhatsAppClick(
+    @Param("id") id: string,
+    @Headers("x-user-id") userId?: string,
+    @Headers("x-session-id") sessionId?: string,
+  ) {
+    return this.propertiesService.recordWhatsAppClick(id, userId || undefined, sessionId || undefined);
   }
 
   // ── Agent self-service endpoints ────────────────────────────────────────────
