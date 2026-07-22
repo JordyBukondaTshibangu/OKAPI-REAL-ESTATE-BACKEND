@@ -34,6 +34,15 @@ export class AlertsController {
     return this.alertsService.getMyAlerts(req.user.userId);
   }
 
+  @ApiOperation({ summary: "Create alert pre-filled from a favourite property (idempotent)" })
+  @Post("from-favourite/:propertyId")
+  createFromFavourite(
+    @Request() req: any,
+    @Param("propertyId") propertyId: string,
+  ) {
+    return this.alertsService.createFromFavourite(req.user.userId, propertyId);
+  }
+
   @ApiOperation({ summary: "Get matching properties for an alert" })
   @Get(":id/matches")
   getMatches(@Request() req: any, @Param("id") id: string) {

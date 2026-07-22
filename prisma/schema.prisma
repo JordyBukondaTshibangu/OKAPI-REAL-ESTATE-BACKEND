@@ -432,9 +432,9 @@ model Enquiry {
 }
 
 model Alert {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   listingType String?
   category    String?
@@ -444,8 +444,9 @@ model Alert {
   suburb      String?
   minBedrooms Int?
   maxBedrooms Int?
-  active      Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  active      Boolean   @default(true)
+  lastSentAt  DateTime?
+  createdAt   DateTime  @default(now())
 }
 
 model Review {

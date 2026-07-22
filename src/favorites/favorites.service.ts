@@ -40,7 +40,11 @@ export class FavoritesService {
   async getMyFavorites(userId: string) {
     return this.prisma.favorite.findMany({
       where: { userId },
-      include: { property: true },
+      include: {
+        property: {
+          include: { agent: { select: { whatsappNumber: true, phoneNumber: true } } },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
   }
