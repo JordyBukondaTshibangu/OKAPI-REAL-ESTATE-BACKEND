@@ -36,4 +36,12 @@ export class UploadsController {
     const [result] = await this.uploadsService.createPresignedUploads([dto]);
     return result;
   }
+
+  /** Agents upload a payment screenshot for a boost request. */
+  @UseGuards(JwtAgentGuard)
+  @Post("presign-boost-screenshot")
+  async presignBoostScreenshot(@Body() dto: PresignFileDto) {
+    const [result] = await this.uploadsService.createPresignedUploads([dto]);
+    return result;
+  }
 }

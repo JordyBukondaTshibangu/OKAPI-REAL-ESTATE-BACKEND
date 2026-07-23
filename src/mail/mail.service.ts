@@ -734,6 +734,94 @@ export class MailService implements OnModuleInit {
     await this.send(email, "Confirmation de suppression de votre compte Okapi", html);
   }
 
+  // ─── Boost Notifications ────────────────────────────────────────────────────
+
+  /** Notify admin of new boost payment request. */
+  async sendAdminNewBoostRequest(opts: {
+    agentName: string;
+    agentEmail: string;
+    propertyTitle: string;
+    durationDays: number;
+    amount: number;
+    paymentMethod: string;
+    reference: string;
+    boostRequestId: string;
+  }) {
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL ?? process.env.MAIL_USER;
+    if (!adminEmail) {
+      this.logger.warn("ADMIN_NOTIFICATION_EMAIL not set — skipping boost admin notification");
+      return;
+    }
+    const dashboardUrl = `${process.env.DASHBOARD_URL ?? "http://localhost:3002"}/boosts`;
+    const methodLabel: Record<string, string> = {
+      ORANGE_MONEY: "Orange Money",
+      MTN_MONEY: "MTN Money",
+      AIRTEL_MONEY: "Airtel Money",
+      MPESA: "M-Pesa (Vodacom)",
+      CASH: "Cash",
+    };
+    const body = `
+      <p>Un agent a soumis une demande de boost et attend votre validation.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;width:150px;">Agent</td><td style="padding:10px 14px;">${opts.agentName} (${opts.agentEmail})</td></tr>
+        <tr><td style="padding:10px 14px;font-weight:bold;">Annonce</td><td style="padding:10px 14px;">${opts.propertyTitle}</td></tr>
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;">Durée</td><td style="padding:10px 14px;">${opts.durationDays} jours — ${opts.amount} $</td></tr>
+        <tr><td style="padding:10px 14px;font-weight:bold;">Paiement</td><td style="padding:10px 14px;">${methodLabel[opts.paymentMethod] ?? opts.paymentMethod}</td></tr>
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;">Référence</td><td style="padding:10px 14px;font-family:monospace;font-size:15px;color:${NAVY};"><strong>${opts.reference}</strong></td></tr>
+      </table>
+      <p style="text-align:center;margin:28px 0;">
+        <a href="${dashboardUrl}" style="background:${NAVY};color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block;">
+          Vérifier dans le Dashboard →
+        </a>
+      </p>
+    `;
+    await this.send(adminEmail, `💰 Nouvelle demande de boost — ${opts.propertyTitle}`, layout("Demande de boost à valider", body));
+  }
+
+  /** Notify agent their boost has been confirmed. */
+  async sendBoostConfirmed(opts: {
+    agentEmail: string;
+    agentName: string;
+    propertyTitle: string;
+    durationDays: number;
+    boostedUntil: Date;
+  }) {
+    const untilStr = opts.boostedUntil.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    const body = `
+      <p>Bonjour <strong>${opts.agentName}</strong>,</p>
+      <p>Votre paiement a été vérifié. Votre annonce est maintenant <strong style="color:${GOLD};">En vedette</strong> dans les résultats de recherche.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;width:130px;">Annonce</td><td style="padding:10px 14px;">${opts.propertyTitle}</td></tr>
+        <tr><td style="padding:10px 14px;font-weight:bold;">Durée</td><td style="padding:10px 14px;">${opts.durationDays} jours</td></tr>
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;">Actif jusqu'au</td><td style="padding:10px 14px;">${untilStr}</td></tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;">
+        Pendant cette période, votre annonce apparaît en tête de liste avec le badge ✨ <em>En vedette</em>.
+      </p>
+    `;
+    await this.send(opts.agentEmail, `✅ Boost confirmé — ${opts.propertyTitle}`, layout("Votre boost est actif !", body));
+  }
+
+  /** Notify agent their boost was rejected. */
+  async sendBoostRejected(opts: {
+    agentEmail: string;
+    agentName: string;
+    propertyTitle: string;
+    reason: string;
+  }) {
+    const body = `
+      <p>Bonjour <strong>${opts.agentName}</strong>,</p>
+      <p>Nous n'avons pas pu confirmer votre paiement pour le boost de l'annonce <strong>${opts.propertyTitle}</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+        <tr style="background:#FEE2E2;"><td style="padding:10px 14px;font-weight:bold;width:130px;">Raison</td><td style="padding:10px 14px;color:#B91C1C;">${opts.reason}</td></tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;">
+        Vous pouvez soumettre une nouvelle demande depuis votre espace agent, en vous assurant que la référence de paiement est correcte.
+      </p>
+    `;
+    await this.send(opts.agentEmail, `❌ Boost refusé — ${opts.propertyTitle}`, layout("Demande de boost refusée", body));
+  }
+
   // ─── Property Alert ─────────────────────────────────────────────────────────
 
   async sendPropertyAlert(

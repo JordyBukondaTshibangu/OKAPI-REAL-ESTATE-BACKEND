@@ -8,6 +8,21 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum BoostStatus {
+  PENDING    // agent submitted, waiting admin confirmation
+  CONFIRMED  // payment verified, boost active
+  REJECTED   // payment invalid or not received
+  EXPIRED    // boost duration ended
+}
+
+enum PaymentMethod {
+  ORANGE_MONEY
+  MTN_MONEY
+  AIRTEL_MONEY
+  MPESA
+  CASH
+}
+
 enum AgentVerificationTier {
   NON_VERIFIE
   VERIFIE
@@ -231,6 +246,7 @@ model Agent {
   createdAt        DateTime @default(now())
 
   properties       Property[]
+  boostRequests    BoostRequest[]
   areasOfExpertise AreaOfExpertise[]
   trackRecord      TrackRecord[]
   reviews          Review[]
@@ -382,6 +398,7 @@ model Property {
   shareCount      Int      @default(0)
 
   // Boost: paid placement — listing appears first in search until this date.
+  isBoosted       Boolean   @default(false)
   boostedUntil    DateTime?
 
   createdAt       DateTime @default(now())
@@ -390,6 +407,7 @@ model Property {
   enquiries     Enquiry[]
   reviews       Review[]
   interactions  PropertyInteraction[]
+  boostRequests BoostRequest[]
 }
 
 model PropertyInteraction {
@@ -471,4 +489,30 @@ model AuditLog {
   resourceId String?
   details    String?
   createdAt  DateTime @default(now())
+}
+
+model BoostRequest {
+  id               String        @id @default(cuid())
+
+  propertyId       String
+  property         Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  agentId          String
+  agent            Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  durationDays     Int
+  amount           Float
+  currency         String        @default("USD")
+
+  paymentMethod    PaymentMethod
+  paymentReference String?
+  screenshotUrl    String?
+
+  status           BoostStatus   @default(PENDING)
+  rejectionReason  String?
+
+  confirmedBy      String?       // admin id
+  confirmedAt      DateTime?
+
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
