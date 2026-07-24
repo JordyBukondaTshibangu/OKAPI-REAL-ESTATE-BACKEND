@@ -4,9 +4,8 @@ CREATE TYPE "BoostStatus" AS ENUM ('PENDING', 'CONFIRMED', 'REJECTED', 'EXPIRED'
 -- CreateEnum
 CREATE TYPE "PaymentMethod" AS ENUM ('ORANGE_MONEY', 'MTN_MONEY', 'AIRTEL_MONEY', 'CASH');
 
--- AlterTable
-ALTER TABLE "Property" ADD COLUMN "isBoosted" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "Property" ADD COLUMN "boostedUntil" TIMESTAMP(3);
+-- AlterTable (boostedUntil already exists from 20260705120000_monetization_plan)
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "isBoosted" BOOLEAN NOT NULL DEFAULT false;
 
 -- CreateTable
 CREATE TABLE "BoostRequest" (
