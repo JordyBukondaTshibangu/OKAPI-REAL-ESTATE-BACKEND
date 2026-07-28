@@ -15,6 +15,13 @@ enum BoostStatus {
   EXPIRED    // boost duration ended
 }
 
+enum SubscriptionStatus {
+  PENDING    // agent submitted, waiting admin confirmation
+  CONFIRMED  // payment verified, subscription active
+  REJECTED   // payment invalid or not received
+  EXPIRED    // subscription period ended
+}
+
 enum PaymentMethod {
   ORANGE_MONEY
   MTN_MONEY
@@ -223,10 +230,14 @@ model Agent {
   emailOtpExpiry DateTime?
 
   // --- Monetisation plan ---
-  plan         AgentPlan @default(FREE)
+  plan                  AgentPlan @default(FREE)
   // Grace period: unlimited listings until this date, then capped at 10 for FREE.
   // Set to now() + 6 months on signup. Existing agents are backfilled.
-  graceEndsAt  DateTime  @default(dbgenerated("now() + interval '6 months'"))
+  graceEndsAt           DateTime  @default(dbgenerated("now() + interval '6 months'"))
+  // Active subscription expiry — null when plan is FREE.
+  subscriptionEndsAt    DateTime?
+  // Tracks the last time a renewal reminder was sent so we don't spam.
+  renewalReminderSentAt DateTime?
   // Whether the agent has been manually suspended by an admin.
   isSuspended     Boolean   @default(false)
   suspendedAt     DateTime?
@@ -245,9 +256,10 @@ model Agent {
 
   createdAt        DateTime @default(now())
 
-  properties       Property[]
-  boostRequests    BoostRequest[]
-  areasOfExpertise AreaOfExpertise[]
+  properties            Property[]
+  boostRequests         BoostRequest[]
+  subscriptionRequests  SubscriptionRequest[]
+  areasOfExpertise      AreaOfExpertise[]
   trackRecord      TrackRecord[]
   reviews          Review[]
 
@@ -515,4 +527,32 @@ model BoostRequest {
 
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+}
+
+model SubscriptionRequest {
+  id               String             @id @default(cuid())
+
+  agentId          String
+  agent            Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  tier             AgentPlan          // PRO or AGENCY
+  amount           Float              // 15 or 50
+  currency         String             @default("USD")
+
+  paymentMethod    PaymentMethod
+  paymentReference String?            // e.g. "PRO-ABC123"
+  screenshotUrl    String?
+
+  status           SubscriptionStatus @default(PENDING)
+  rejectionReason  String?
+
+  confirmedBy      String?            // admin id
+  confirmedAt      DateTime?
+
+  // Computed on confirmation
+  periodStart      DateTime?
+  periodEnd        DateTime?
+
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 }

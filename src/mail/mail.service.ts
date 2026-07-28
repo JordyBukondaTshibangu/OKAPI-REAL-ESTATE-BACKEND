@@ -822,6 +822,132 @@ export class MailService implements OnModuleInit {
     await this.send(opts.agentEmail, `❌ Boost refusé — ${opts.propertyTitle}`, layout("Demande de boost refusée", body));
   }
 
+  // ─── Subscriptions ──────────────────────────────────────────────────────────
+
+  async sendAdminNewSubscriptionRequest(opts: {
+    agentName: string;
+    agentEmail: string;
+    tier: string;
+    amount: number;
+    paymentMethod: string;
+    reference: string;
+    subscriptionRequestId: string;
+  }) {
+    const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL ?? process.env.MAIL_USER;
+    if (!adminEmail) return;
+    const dashboardUrl = `${process.env.DASHBOARD_URL ?? "http://localhost:3002"}/subscriptions`;
+    const methodLabel: Record<string, string> = {
+      ORANGE_MONEY: "Orange Money", MTN_MONEY: "MTN Money",
+      AIRTEL_MONEY: "Airtel Money", MPESA: "M-Pesa (Vodacom)", CASH: "Cash",
+    };
+    const body = `
+      <p>Un agent souhaite souscrire à un abonnement et attend votre validation.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;width:150px;">Agent</td><td style="padding:10px 14px;">${opts.agentName} (${opts.agentEmail})</td></tr>
+        <tr><td style="padding:10px 14px;font-weight:bold;">Plan</td><td style="padding:10px 14px;">${opts.tier} — ${opts.amount} $/mois</td></tr>
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;">Paiement</td><td style="padding:10px 14px;">${methodLabel[opts.paymentMethod] ?? opts.paymentMethod}</td></tr>
+        <tr><td style="padding:10px 14px;font-weight:bold;">Référence</td><td style="padding:10px 14px;font-family:monospace;font-size:15px;color:${NAVY};"><strong>${opts.reference}</strong></td></tr>
+      </table>
+      <p style="text-align:center;margin:28px 0;">
+        <a href="${dashboardUrl}" style="background:${NAVY};color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block;">
+          Vérifier dans le Dashboard →
+        </a>
+      </p>
+    `;
+    await this.send(adminEmail, `🌟 Nouvelle demande d'abonnement ${opts.tier} — ${opts.agentName}`, layout("Abonnement à valider", body));
+  }
+
+  async sendSubscriptionConfirmed(opts: {
+    agentEmail: string;
+    agentName: string;
+    tier: string;
+    amount: number;
+    periodEnd: Date;
+  }) {
+    if (!opts.agentEmail) return;
+    const untilStr = opts.periodEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    const body = `
+      <p>Bonjour <strong>${opts.agentName}</strong>,</p>
+      <p>Votre paiement a été vérifié. Votre abonnement <strong style="color:${GOLD};">${opts.tier}</strong> est maintenant actif.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+        <tr style="background:#F2F4F7;"><td style="padding:10px 14px;font-weight:bold;width:130px;">Plan</td><td style="padding:10px 14px;">${opts.tier} — ${opts.amount} $/mois</td></tr>
+        <tr><td style="padding:10px 14px;font-weight:bold;">Valable jusqu'au</td><td style="padding:10px 14px;">${untilStr}</td></tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;">
+        Vous pouvez publier des annonces sans limite et accéder à vos statistiques de performance.
+      </p>
+    `;
+    await this.send(opts.agentEmail, `✅ Abonnement ${opts.tier} activé`, layout("Votre abonnement est actif !", body));
+  }
+
+  async sendSubscriptionRejected(opts: {
+    agentEmail: string;
+    agentName: string;
+    tier: string;
+    reason: string;
+  }) {
+    if (!opts.agentEmail) return;
+    const body = `
+      <p>Bonjour <strong>${opts.agentName}</strong>,</p>
+      <p>Nous n'avons pas pu confirmer votre paiement pour l'abonnement <strong>${opts.tier}</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px;">
+        <tr style="background:#FEE2E2;"><td style="padding:10px 14px;font-weight:bold;width:130px;">Raison</td><td style="padding:10px 14px;color:#B91C1C;">${opts.reason}</td></tr>
+      </table>
+      <p style="font-size:13px;color:#6b7280;">
+        Vous pouvez soumettre une nouvelle demande depuis votre espace agent en vous assurant que la référence de paiement est correcte.
+      </p>
+    `;
+    await this.send(opts.agentEmail, `❌ Abonnement ${opts.tier} refusé`, layout("Demande d'abonnement refusée", body));
+  }
+
+  async sendSubscriptionRenewalReminder(opts: {
+    agentEmail: string;
+    agentName: string;
+    tier: string;
+    expiresAt: Date;
+  }) {
+    if (!opts.agentEmail) return;
+    const expiryStr = opts.expiresAt.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+    const renewUrl = `${this.baseUrl}/espace-agent/abonnement`;
+    const body = `
+      <p>Bonjour <strong>${opts.agentName}</strong>,</p>
+      <p>Votre abonnement <strong style="color:${GOLD};">${opts.tier}</strong> expire le <strong>${expiryStr}</strong> — dans 7 jours.</p>
+      <p>Pour maintenir un accès illimité aux annonces et à vos statistiques, renouvelez maintenant.</p>
+      <p style="text-align:center;margin:28px 0;">
+        <a href="${renewUrl}" style="background:${GOLD};color:${NAVY};text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block;">
+          Renouveler mon abonnement →
+        </a>
+      </p>
+      <p style="font-size:13px;color:#6b7280;">
+        Sans renouvellement, votre compte reviendra au plan gratuit (max. 10 annonces actives) à partir du ${expiryStr}.
+      </p>
+    `;
+    await this.send(opts.agentEmail, `⏳ Votre abonnement ${opts.tier} expire dans 7 jours`, layout("Rappel de renouvellement", body));
+  }
+
+  async sendSubscriptionExpired(opts: {
+    agentEmail: string;
+    agentName: string;
+    hiddenCount: number;
+  }) {
+    if (!opts.agentEmail) return;
+    const renewUrl = `${this.baseUrl}/espace-agent/abonnement`;
+    const overflowNote = opts.hiddenCount > 0
+      ? `<p style="color:#B91C1C;font-weight:bold;">${opts.hiddenCount} de vos annonces ont été masquées (limite gratuite : 10 annonces actives).</p>`
+      : "";
+    const body = `
+      <p>Bonjour <strong>${opts.agentName}</strong>,</p>
+      <p>Votre abonnement a expiré. Votre compte est revenu au plan <strong>Gratuit</strong>.</p>
+      ${overflowNote}
+      <p style="text-align:center;margin:28px 0;">
+        <a href="${renewUrl}" style="background:${GOLD};color:${NAVY};text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:bold;display:inline-block;">
+          Renouveler mon abonnement →
+        </a>
+      </p>
+    `;
+    await this.send(opts.agentEmail, "⚠️ Votre abonnement Okapi a expiré", layout("Abonnement expiré", body));
+  }
+
   // ─── Property Alert ─────────────────────────────────────────────────────────
 
   async sendPropertyAlert(
