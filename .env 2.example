@@ -1,9 +1,0 @@
-
-# Twilio SMS (for agent phone OTP verification)
-# TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-# TWILIO_AUTH_TOKEN=your_auth_token
-# TWILIO_PHONE_NUMBER=+1xxxxxxxxxx
-
-# Admin notifications (new agent pending approval)
-# ADMIN_NOTIFICATION_EMAIL=admin@okapi-real-estate.com
-# DASHBOARD_URL=https://dashboard.okapi-real-estate.com
