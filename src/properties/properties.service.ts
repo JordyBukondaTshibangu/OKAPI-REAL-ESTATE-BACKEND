@@ -25,8 +25,11 @@ export class PropertiesService {
     private mail: MailService,
   ) {}
 
-  /** Resolves a stored R2 object key (e.g. "tmp/<uuid>.jpg") to a public URL. */
+  /** Resolves a stored R2 object key (e.g. "tmp/<uuid>.jpg") to a public URL.
+   *  If the key is already an absolute URL (e.g. a previously double-prefixed value
+   *  that slipped through), return it as-is to avoid further prefix stacking. */
   private toGalleryUrl(key: string) {
+    if (/^https?:\/\//.test(key)) return key;
     const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
     return `${base}/${key.replace(/^\//, "")}`;
   }
@@ -422,9 +425,27 @@ export class PropertiesService {
 
   async update(id: string, dto: UpdatePropertyDto) {
     await this.findOne(id);
+
+    // Normalize gallery: strip any R2 base URL prefix so the DB always stores
+    // bare object keys (same logic as updateMine). Prevents URL accumulation
+    // when the dashboard sends back the full URLs it received from the API.
+    let data: typeof dto = dto;
+    if (dto.gallery && dto.gallery.length > 0) {
+      const r2Base =
+        (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "") + "/";
+      const normalized = r2Base.length > 1
+        ? dto.gallery.map((k) => {
+            let key = k;
+            while (key.startsWith(r2Base)) key = key.slice(r2Base.length);
+            return key;
+          })
+        : dto.gallery;
+      data = { ...dto, gallery: normalized };
+    }
+
     const property = await this.prisma.property.update({
       where: { id },
-      data: dto,
+      data,
       include: { _count: { select: { favorites: true } } },
     });
     return this.withPerformance(this.withGalleryUrls(property));
@@ -573,6 +594,18 @@ export class PropertiesService {
 
     // Promote any new tmp/ gallery keys the agent uploaded (same as in create())
     let galleryKeys = dto.gallery ?? property.gallery;
+
+    // Normalize: strip any R2 base URL prefix so the DB always stores bare keys.
+    // This heals entries that were accidentally stored as full URLs in previous saves.
+    const r2Base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "") + "/";
+    if (r2Base.length > 1) {
+      galleryKeys = galleryKeys.map((k: string) => {
+        let normalized = k;
+        while (normalized.startsWith(r2Base)) normalized = normalized.slice(r2Base.length);
+        return normalized;
+      });
+    }
+
     const tmpKeys = galleryKeys.filter((k: string) => k.startsWith("tmp/"));
     if (tmpKeys.length > 0) {
       try {
