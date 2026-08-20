@@ -44,4 +44,12 @@ export class UploadsController {
     const [result] = await this.uploadsService.createPresignedUploads([dto]);
     return result;
   }
+
+  /** Agents upload a payment screenshot for a subscription request. */
+  @UseGuards(JwtAgentGuard)
+  @Post("presign-subscription-screenshot")
+  async presignSubscriptionScreenshot(@Body() dto: PresignFileDto) {
+    const [result] = await this.uploadsService.createPresignedUploads([dto]);
+    return result;
+  }
 }
