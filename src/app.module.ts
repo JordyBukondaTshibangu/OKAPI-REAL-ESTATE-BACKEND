@@ -4,6 +4,7 @@ import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 import { AgenciesModule } from "./agencies/agencies.module";
 import { BoostsModule } from "./boosts/boosts.module";
 import { SubscriptionsModule } from "./subscriptions/subscriptions.module";
+import { ReportsModule } from "./reports/reports.module";
 import { AgentVerificationModule } from "./agent-verification/agent-verification.module";
 import { AgentsModule } from "./agents/agents.module";
 import { AlertsModule } from "./alerts/alerts.module";
@@ -39,6 +40,7 @@ import { AppService } from './app.service';
     UploadsModule,
     BoostsModule,
     SubscriptionsModule,
+    ReportsModule,
   ],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard,  }],
   controllers: [AppController],  // ← add this

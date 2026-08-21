@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum BoostStatus {
@@ -119,6 +118,7 @@ model User {
   alerts     Alert[]
   reviews    Review[]
   complaintsFiled AgentComplaint[]
+  reports    Report[]
 }
 
 model Agency {
@@ -420,6 +420,7 @@ model Property {
   reviews       Review[]
   interactions  PropertyInteraction[]
   boostRequests BoostRequest[]
+  reports       Report[]
 }
 
 model PropertyInteraction {
@@ -501,6 +502,42 @@ model AuditLog {
   resourceId String?
   details    String?
   createdAt  DateTime @default(now())
+}
+
+enum ReportReason {
+  FAKE_LISTING
+  WRONG_PRICE
+  STOLEN_PHOTOS
+  ALREADY_RENTED
+  SCAM
+  INAPPROPRIATE
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  DISMISSED
+  LISTING_HIDDEN
+  AGENT_WARNED
+  AGENT_SUSPENDED
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  propertyId  String
+  property    Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId      String?      // null if guest
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  reason      ReportReason
+  description String?
+  status      ReportStatus @default(PENDING)
+  resolvedBy  String?      // admin id
+  resolvedAt  DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@index([propertyId])
+  @@index([status])
 }
 
 model BoostRequest {
