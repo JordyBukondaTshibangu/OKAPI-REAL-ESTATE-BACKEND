@@ -430,6 +430,8 @@ export class PropertiesService {
     // bare object keys (same logic as updateMine). Prevents URL accumulation
     // when the dashboard sends back the full URLs it received from the API.
     let data: typeof dto = dto;
+    // Normalize empty-string FK to null so Prisma doesn't attempt a lookup
+    if (data.agencyId === "") data = { ...data, agencyId: null };
     if (dto.gallery && dto.gallery.length > 0) {
       const r2Base =
         (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "") + "/";
