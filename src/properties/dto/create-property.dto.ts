@@ -34,13 +34,7 @@ export class CreatePropertyDto {
   @IsOptional() @IsArray() @IsString({ each: true }) amenities?: string[];
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() reference?: string;
-  @IsOptional() @IsString() zone?: string;
-  @IsOptional() @IsString() brokerLicense?: string;
-  @IsOptional() @IsString() agentLicense?: string;
-  @IsOptional() @IsString() permitNumber?: string;
   @IsOptional() @IsString() availableFrom?: string;
-  @IsOptional() @IsNumber() averagePriceArea?: number;
-  @IsOptional() @IsNumber() averageSizeArea?: number;
   // Agent-facing fields
   @IsOptional() @IsString() landmark?: string;
   @IsOptional() @IsBoolean() isFurnished?: boolean;

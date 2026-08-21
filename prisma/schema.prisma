@@ -383,13 +383,7 @@ model Property {
 
   description     String?
   reference       String?
-  zone            String?
-  brokerLicense   String?
-  agentLicense    String?
-  permitNumber    String?
   availableFrom   String?
-  averagePriceArea Float?
-  averageSizeArea  Float?
   landmark        String?           // Point de repère (near school, market, etc.)
   isFurnished     Boolean           @default(false)
 
