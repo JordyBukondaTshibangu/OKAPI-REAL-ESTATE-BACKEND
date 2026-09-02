@@ -85,6 +85,10 @@ export class UsersService {
     return this.withAvatarUrl(user);
   }
 
+  async countAll(): Promise<number> {
+    return this.prisma.user.count();
+  }
+
   async deleteMe(userId: string) {
     const existing = await this.prisma.user.findUnique({
       where: { id: userId },

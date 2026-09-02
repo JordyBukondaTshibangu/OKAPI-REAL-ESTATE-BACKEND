@@ -34,9 +34,17 @@ export class PropertiesService {
     return `${base}/${key.replace(/^\//, "")}`;
   }
 
-  private withGalleryUrls<T extends { gallery: string[] }>(property: T): T {
+  private withGalleryUrls<T extends { gallery: string[]; createdAt?: Date; listedDaysAgo?: number }>(property: T): T {
+    const computed: Partial<T> = {};
+    if (property.createdAt instanceof Date) {
+      // Always derive listedDaysAgo from createdAt so it stays accurate over time.
+      (computed as any).listedDaysAgo = Math.floor(
+        (Date.now() - property.createdAt.getTime()) / 86_400_000,
+      );
+    }
     return {
       ...property,
+      ...computed,
       gallery: property.gallery.map((key) => this.toGalleryUrl(key)),
     };
   }
