@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
 import { JwtUserGuard } from "../auth/guards/jwt-user.guard";
 import { UpdateAvatarDto } from "./dto/update-avatar.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
@@ -19,6 +20,13 @@ import { UsersService } from "./users.service";
 @Controller("users")
 export class UsersController {
   constructor(private usersService: UsersService) {}
+
+  @ApiOperation({ summary: "Count all registered users (admin only)" })
+  @UseGuards(JwtAdminGuard)
+  @Get("count")
+  countAll() {
+    return this.usersService.countAll().then((count) => ({ count }));
+  }
 
   @ApiOperation({ summary: "Get my profile" })
   @Get("me")
