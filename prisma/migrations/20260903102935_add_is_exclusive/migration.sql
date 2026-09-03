@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Property" ADD COLUMN IF NOT EXISTS "isExclusive" BOOLEAN NOT NULL DEFAULT false;
