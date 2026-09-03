@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -215,6 +216,27 @@ export class PropertiesService {
     const statusOverride = agentId
       ? { status: "DRAFT" as const, isPublished: false }
       : { status: "LIVE" as const, isPublished: true, publishedAt: new Date() };
+
+    // If the agent wants to mark this listing as exclusive, verify no other
+    // agent already holds an exclusive on a property with the same title +
+    // suburb combination (the closest we can get to "same property" without
+    // an address field). Block the submission if a conflict is found.
+    if (dto.isExclusive && dto.suburb && dto.title) {
+      const existingExclusive = await this.prisma.property.findFirst({
+        where: {
+          isExclusive: true,
+          suburb: dto.suburb,
+          title: { contains: dto.title.slice(0, 20), mode: "insensitive" },
+          status: { in: ["LIVE", "PENDING", "DRAFT"] },
+          agentId: { not: agentId },
+        },
+      });
+      if (existingExclusive) {
+        throw new ConflictException(
+          "Un autre agent a déjà une annonce exclusive pour un bien similaire dans ce quartier. Veuillez contacter l'équipe Okapi si vous pensez qu'il s'agit d'une erreur.",
+        );
+      }
+    }
 
     const property = await this.prisma.property.create({
       data: {

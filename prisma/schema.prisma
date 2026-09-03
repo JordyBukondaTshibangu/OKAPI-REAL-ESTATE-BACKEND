@@ -407,6 +407,9 @@ model Property {
   isBoosted       Boolean   @default(false)
   boostedUntil    DateTime?
 
+  // Exclusive: Pro-only flag — only this agent can list this property on Okapi.
+  isExclusive     Boolean   @default(false)
+
   createdAt       DateTime @default(now())
 
   favorites     Favorite[]

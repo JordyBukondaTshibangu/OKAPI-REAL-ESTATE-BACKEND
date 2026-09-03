@@ -10,6 +10,13 @@ import { CreateFavoriteDto } from "./dto/create-favorite.dto";
 export class FavoritesService {
   constructor(private prisma: PrismaService) {}
 
+  /** Mirrors PropertiesService.toGalleryUrl — converts a raw R2 key to a public CDN URL. */
+  private toGalleryUrl(key: string): string {
+    if (/^https?:\/\//.test(key)) return key;
+    const base = (process.env.R2_PUBLIC_URL ?? "").replace(/\/$/, "");
+    return `${base}/${key.replace(/^\//, "")}`;
+  }
+
   async addFavorite(userId: string, dto: CreateFavoriteDto) {
     const property = await this.prisma.property.findUnique({
       where: { id: dto.propertyId },
@@ -38,7 +45,7 @@ export class FavoritesService {
   }
 
   async getMyFavorites(userId: string) {
-    return this.prisma.favorite.findMany({
+    const rows = await this.prisma.favorite.findMany({
       where: { userId },
       include: {
         property: {
@@ -47,5 +54,15 @@ export class FavoritesService {
       },
       orderBy: { createdAt: "desc" },
     });
+
+    // Convert raw R2 storage keys in gallery[] to public CDN URLs,
+    // exactly as PropertiesService does for every other endpoint.
+    return rows.map((fav) => ({
+      ...fav,
+      property: {
+        ...fav.property,
+        gallery: fav.property.gallery.map((key) => this.toGalleryUrl(key)),
+      },
+    }));
   }
 }

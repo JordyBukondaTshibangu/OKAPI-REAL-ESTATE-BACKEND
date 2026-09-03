@@ -41,6 +41,7 @@ export class CreatePropertyDto {
 
   // --- Rental duration type ---
   @IsOptional() @IsBoolean() isShortTerm?: boolean;
+  @IsOptional() @IsBoolean() isExclusive?: boolean;
   @IsOptional() @IsBoolean() isLongTerm?: boolean;
 
   // Short-term optional details
