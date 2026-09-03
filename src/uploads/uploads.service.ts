@@ -2,10 +2,13 @@ import { Injectable, OnModuleInit } from "@nestjs/common";
 import {
   CopyObjectCommand,
   DeleteObjectsCommand,
+  GetObjectCommand,
   PutBucketCorsCommand,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
+import sharp from "sharp";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
 import { PresignFileDto } from "./dto/presign-upload.dto";
@@ -126,11 +129,67 @@ export class UploadsService implements OnModuleInit {
     );
   }
 
+  /** Downloads a key from R2 and returns its bytes as a Buffer. */
+  private async downloadKey(key: string): Promise<Buffer> {
+    const res = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    const stream = res.Body as Readable;
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+
   /**
-   * Copies each tmp/ object to a permanent properties/{propertyId}/ key and
-   * deletes the tmp/ originals. Returns the new permanent keys in the same
-   * order as the input. Throws if any copy fails — callers decide how to
-   * handle a partially-promoted gallery.
+   * Applies a subtle "Okapi Real Estate" watermark to an image buffer.
+   * Falls back to the original bytes if sharp fails (e.g. unsupported format).
+   */
+  private async applyWatermark(input: Buffer): Promise<Buffer> {
+    try {
+      const { width = 800, height = 600 } = await sharp(input).metadata();
+      const fontSize = Math.max(14, Math.round(Math.min(width, height) * 0.035));
+      const padRight = Math.round(width * 0.02);
+      const padBottom = Math.round(height * 0.03);
+      const textW = fontSize * 14; // rough estimate for "Okapi Real Estate"
+      const textH = fontSize + 8;
+
+      const svgOverlay = Buffer.from(
+        `<svg width="${textW}" height="${textH}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" rx="4" fill="rgba(0,0,0,0.32)" />
+          <text
+            x="50%" y="50%"
+            dominant-baseline="middle"
+            text-anchor="middle"
+            font-family="Arial, sans-serif"
+            font-size="${fontSize}px"
+            fill="rgba(255,255,255,0.72)"
+            font-weight="600"
+            letter-spacing="0.5"
+          >Okapi Real Estate</text>
+        </svg>`,
+      );
+
+      return await sharp(input)
+        .composite([{
+          input: svgOverlay,
+          gravity: "southeast",
+          top: height - textH - padBottom,
+          left: width - textW - padRight,
+        }])
+        .jpeg({ quality: 88 })
+        .toBuffer();
+    } catch (err) {
+      console.warn("[watermark] Could not apply watermark, using original:", err);
+      return input;
+    }
+  }
+
+  /**
+   * Downloads each tmp/ image, stamps the Okapi watermark, uploads to the
+   * permanent properties/{propertyId}/ key, then deletes the tmp/ originals.
+   * Returns the new permanent keys in the same order as the input.
    */
   async promoteKeys(tmpKeys: string[], propertyId: string): Promise<string[]> {
     const promotedKeys = await Promise.all(
@@ -138,11 +197,16 @@ export class UploadsService implements OnModuleInit {
         const filename = tmpKey.split("/").pop();
         const newKey = `properties/${propertyId}/${filename}`;
 
+        // Download → watermark → re-upload (instead of a plain server-side copy)
+        const original = await this.downloadKey(tmpKey);
+        const watermarked = await this.applyWatermark(original);
+
         await this.client.send(
-          new CopyObjectCommand({
+          new PutObjectCommand({
             Bucket: this.bucket,
-            CopySource: `${this.bucket}/${tmpKey}`,
             Key: newKey,
+            Body: watermarked,
+            ContentType: "image/jpeg",
           }),
         );
 
@@ -150,6 +214,7 @@ export class UploadsService implements OnModuleInit {
       }),
     );
 
+    // Clean up tmp/ originals after all uploads succeed
     await this.client.send(
       new DeleteObjectsCommand({
         Bucket: this.bucket,
