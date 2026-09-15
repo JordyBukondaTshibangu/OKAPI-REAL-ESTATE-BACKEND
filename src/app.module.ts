@@ -18,8 +18,8 @@ import { PropertiesModule } from "./properties/properties.module";
 import { ReviewsModule } from "./reviews/reviews.module";
 import { UploadsModule } from "./uploads/uploads.module";
 import { UsersModule } from "./users/users.module";
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { AppController } from "./app.controller";
+import { AppService } from "./app.service";
 
 @Module({
   imports: [
@@ -42,8 +42,7 @@ import { AppService } from './app.service';
     SubscriptionsModule,
     ReportsModule,
   ],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard,  }],
-  controllers: [AppController],  // ← add this
-
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  controllers: [AppController], // ← add this
 })
 export class AppModule {}

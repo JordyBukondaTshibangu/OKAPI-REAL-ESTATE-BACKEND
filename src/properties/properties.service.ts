@@ -12,6 +12,7 @@ import { UploadsService } from "../uploads/uploads.service";
 import { CreatePropertyDto } from "./dto/create-property.dto";
 import { PropertyFilterDto } from "./dto/property-filter.dto";
 import { UpdatePropertyDto } from "./dto/update-property.dto";
+import { FEATURE_FLAGS } from "../config/features";
 
 /** Free agents may have at most this many active listings after their grace period ends. */
 const FREE_LISTING_CAP = 10;
@@ -222,7 +223,9 @@ export class PropertiesService {
     // suburb combination (the closest we can get to "same property" without
     // an address field). Block the submission if a conflict is found.
     if (dto.isExclusive && dto.suburb && dto.title) {
-      const existingExclusive = await this.prisma.property.findFirst({
+      // isExclusive exists in schema — run `prisma generate` to refresh client types
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const existingExclusive = await (this.prisma.property.findFirst as any)({
         where: {
           isExclusive: true,
           suburb: dto.suburb,
@@ -433,6 +436,9 @@ export class PropertiesService {
         "Your account has been suspended. Please contact support.",
       );
     }
+
+    // Payments disabled — all verified agents have unlimited listings.
+    if (!FEATURE_FLAGS.PAYMENTS_ENABLED) return;
 
     // PRO and AGENCY plans have no listing cap.
     if (agent.plan !== "FREE") return;
