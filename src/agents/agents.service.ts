@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { AgentPlan } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { toR2Url, UploadsService } from "../uploads/uploads.service";
@@ -34,6 +39,11 @@ export class AgentsService {
     specialization,
     language,
     nationality,
+    commune,
+    propertyType,
+    minRating,
+    agentType,
+    rentalFocus,
     agencyId,
     verificationTier,
     emailVerified,
@@ -73,6 +83,17 @@ export class AgentsService {
     if (language) where.languages = { has: language };
     if (nationality)
       where.nationality = { equals: nationality, mode: "insensitive" };
+    // Filter by commune of operation (agent serves this area)
+    if (commune) where.communes = { has: commune };
+    // Filter by property type managed (agent handles this property type)
+    if (propertyType) where.propertyTypes = { has: propertyType };
+    // Filter by minimum rating
+    if (minRating !== undefined && minRating > 0)
+      where.rating = { gte: minRating };
+    // Filter by agent type (COMMISSIONNAIRE | AGENT | AGENCY_OWNER)
+    if (agentType) where.agentType = agentType;
+    // Filter by rental focus (LONG_TERM | SHORT_TERM | BOTH)
+    if (rentalFocus) where.rentalFocus = rentalFocus;
     // Agency portal: scope to a specific agency's team (bypasses verificationTier filter)
     if (agencyId) where.agencyId = agencyId;
 
@@ -184,12 +205,17 @@ export class AgentsService {
     }
 
     try {
-      const agent = await this.prisma.agent.update({ where: { id: agentId }, data });
+      const agent = await this.prisma.agent.update({
+        where: { id: agentId },
+        data,
+      });
       return this.withPhotoUrl(agent);
     } catch (err: any) {
       if (err?.code === "P2002") {
         const field = err?.meta?.target?.[0] ?? "field";
-        throw new BadRequestException(`Ce ${field} est déjà utilisé par un autre agent.`);
+        throw new BadRequestException(
+          `Ce ${field} est déjà utilisé par un autre agent.`,
+        );
       }
       throw err;
     }
@@ -201,8 +227,12 @@ export class AgentsService {
       select: { agencyId: true, agentType: true },
     });
     if (!agent) throw new NotFoundException("Agent not found");
-    if (agent.agentType !== "AGENCY_OWNER") throw new ForbiddenException("Only agency owners can update agency details.");
-    if (!agent.agencyId) throw new ForbiddenException("No agency linked to your account.");
+    if (agent.agentType !== "AGENCY_OWNER")
+      throw new ForbiddenException(
+        "Only agency owners can update agency details.",
+      );
+    if (!agent.agencyId)
+      throw new ForbiddenException("No agency linked to your account.");
 
     // Strip empty strings before writing
     const data: Record<string, unknown> = {};
@@ -266,7 +296,11 @@ export class AgentsService {
     await this.findOne(agentId);
     const agent = await this.prisma.agent.update({
       where: { id: agentId },
-      data: { isSuspended: true, suspendedAt: new Date(), suspendedReason: reason ?? null },
+      data: {
+        isSuspended: true,
+        suspendedAt: new Date(),
+        suspendedReason: reason ?? null,
+      },
     });
     return this.withPhotoUrl(agent);
   }

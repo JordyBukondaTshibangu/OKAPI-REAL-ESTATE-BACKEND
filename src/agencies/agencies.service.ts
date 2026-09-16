@@ -14,6 +14,10 @@ export class AgenciesService {
     search,
     name,
     language,
+    commune,
+    propertyType,
+    rentalFocus,
+    minAgents,
     sortBy,
     sortOrder,
   }: FilterAgencyDto) {
@@ -31,6 +35,15 @@ export class AgenciesService {
     }
     if (name) where.name = { contains: name, mode: "insensitive" };
     if (language) where.languages = { has: language };
+    // Filter by commune of operation
+    if (commune) where.communes = { has: commune };
+    // Filter by property type managed
+    if (propertyType) where.propertyTypes = { has: propertyType };
+    // Filter by rental focus
+    if (rentalFocus) where.rentalFocus = rentalFocus;
+    // Filter by minimum agent count
+    if (minAgents != null && minAgents > 0)
+      where.agentCount = { gte: minAgents };
 
     const orderBy = sortBy
       ? { [sortBy]: order }
@@ -74,7 +87,9 @@ export class AgenciesService {
       verificationStatus: "APPROVED" as const,
       approvedAt: new Date(),
       // Convert date-only string (e.g. "2026-10-29") to a full Date object
-      gracePeriodEndsAt: dto.gracePeriodEndsAt ? new Date(dto.gracePeriodEndsAt) : undefined,
+      gracePeriodEndsAt: dto.gracePeriodEndsAt
+        ? new Date(dto.gracePeriodEndsAt)
+        : undefined,
     };
     const clean = Object.fromEntries(
       Object.entries(payload).filter(([, v]) => v !== undefined),

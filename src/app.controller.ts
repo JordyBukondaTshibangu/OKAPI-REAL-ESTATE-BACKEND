@@ -7,6 +7,11 @@ export class AppController {
 
   @Get()
   getHealth(): string {
-    return 'OK';
+    return "OK";
+  }
+
+  @Get("stats")
+  getPlatformStats() {
+    return this.appService.getPlatformStats();
   }
 }
