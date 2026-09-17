@@ -71,7 +71,10 @@ export class UploadsService implements OnModuleInit {
       console.log("[R2 CORS] Rules applied for origins:", allowedOrigins);
     } catch (err: any) {
       // Log but don't crash the app — CORS may already be set via the dashboard.
-      console.warn("[R2 CORS] Could not apply CORS rules:", err?.message ?? err);
+      console.warn(
+        "[R2 CORS] Could not apply CORS rules:",
+        err?.message ?? err,
+      );
     }
   }
 
@@ -167,7 +170,7 @@ export class UploadsService implements OnModuleInit {
 
       // Clamp so badge never goes off-canvas
       const left = Math.max(0, width - badgeW - marginRight);
-      const top  = Math.max(0, height - badgeH - marginBottom);
+      const top = Math.max(0, height - badgeH - marginBottom);
 
       // Navy background (#0B1D3A at 0.82) with gold text (#D4AF37) — Okapi brand colours
       const svgOverlay = Buffer.from(
@@ -192,7 +195,10 @@ export class UploadsService implements OnModuleInit {
         .jpeg({ quality: 88 })
         .toBuffer();
     } catch (err) {
-      console.warn("[watermark] Could not apply watermark, using original:", err);
+      console.warn(
+        "[watermark] Could not apply watermark, using original:",
+        err,
+      );
       return input;
     }
   }
