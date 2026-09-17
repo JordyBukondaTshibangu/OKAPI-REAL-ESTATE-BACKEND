@@ -488,6 +488,9 @@ model Review {
   rating     Int
   comment    String?
   createdAt  DateTime  @default(now())
+
+  @@unique([userId, agentId])
+  @@unique([userId, propertyId])
 }
 
 model AuditLog {

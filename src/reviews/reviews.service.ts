@@ -14,7 +14,9 @@ export class ReviewsService {
     if (!dto.propertyId && !dto.agentId)
       throw new BadRequestException("Provide propertyId or agentId");
     if (dto.propertyId && dto.agentId)
-      throw new BadRequestException("Provide only one of propertyId or agentId");
+      throw new BadRequestException(
+        "Provide only one of propertyId or agentId",
+      );
 
     if (dto.propertyId) {
       const exists = await this.prisma.property.findUnique({
@@ -27,6 +29,24 @@ export class ReviewsService {
         where: { id: dto.agentId },
       });
       if (!exists) throw new NotFoundException("Agent not found");
+
+      const duplicate = await this.prisma.review.findUnique({
+        where: { userId_agentId: { userId, agentId: dto.agentId } },
+      });
+      if (duplicate)
+        throw new BadRequestException(
+          "Vous avez déjà laissé un avis pour cet agent.",
+        );
+    }
+
+    if (dto.propertyId) {
+      const duplicate = await this.prisma.review.findUnique({
+        where: { userId_propertyId: { userId, propertyId: dto.propertyId } },
+      });
+      if (duplicate)
+        throw new BadRequestException(
+          "Vous avez déjà laissé un avis pour ce bien.",
+        );
     }
 
     return this.prisma.review.create({
