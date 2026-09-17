@@ -148,36 +148,47 @@ export class UploadsService implements OnModuleInit {
    */
   private async applyWatermark(input: Buffer): Promise<Buffer> {
     try {
-      const { width = 800, height = 600 } = await sharp(input).metadata();
-      const fontSize = Math.max(14, Math.round(Math.min(width, height) * 0.035));
-      const padRight = Math.round(width * 0.02);
-      const padBottom = Math.round(height * 0.03);
-      const textW = fontSize * 14; // rough estimate for "Okapi Real Estate"
-      const textH = fontSize + 8;
+      const meta = await sharp(input).metadata();
+      const width = meta.width ?? 800;
+      const height = meta.height ?? 600;
+      const shortSide = Math.min(width, height);
 
+      // Font scales with image — 5% of the short side, min 22px, no hard cap
+      const fontSize = Math.max(22, Math.round(shortSide * 0.05));
+      // Inner padding inside the badge
+      const padX = Math.round(fontSize * 1.0);
+      const padY = Math.round(fontSize * 0.55);
+      // Badge dimensions (wide enough for "Okapi Real Estate" at this font size)
+      const badgeW = Math.round(fontSize * 13);
+      const badgeH = Math.round(fontSize + padY * 2);
+      // Margin from the bottom-right edge
+      const marginRight = Math.round(width * 0.025);
+      const marginBottom = Math.round(height * 0.03);
+
+      // Clamp so badge never goes off-canvas
+      const left = Math.max(0, width - badgeW - marginRight);
+      const top  = Math.max(0, height - badgeH - marginBottom);
+
+      // Navy background (#0B1D3A at 0.82) with gold text (#D4AF37) — Okapi brand colours
       const svgOverlay = Buffer.from(
-        `<svg width="${textW}" height="${textH}" xmlns="http://www.w3.org/2000/svg">
-          <rect width="100%" height="100%" rx="4" fill="rgba(0,0,0,0.32)" />
+        `<svg width="${badgeW}" height="${badgeH}" xmlns="http://www.w3.org/2000/svg">
+          <rect width="100%" height="100%" rx="6" fill="rgba(11,29,58,0.82)" />
           <text
-            x="50%" y="50%"
+            x="${padX}" y="50%"
             dominant-baseline="middle"
-            text-anchor="middle"
-            font-family="Arial, sans-serif"
+            text-anchor="start"
+            font-family="Arial, Helvetica, sans-serif"
             font-size="${fontSize}px"
-            fill="rgba(255,255,255,0.72)"
-            font-weight="600"
-            letter-spacing="0.5"
+            fill="#D4AF37"
+            font-weight="700"
+            letter-spacing="1.5"
           >Okapi Real Estate</text>
         </svg>`,
       );
 
+      // top/left only — do NOT combine with gravity (they conflict in sharp)
       return await sharp(input)
-        .composite([{
-          input: svgOverlay,
-          gravity: "southeast",
-          top: height - textH - padBottom,
-          left: width - textW - padRight,
-        }])
+        .composite([{ input: svgOverlay, top, left }])
         .jpeg({ quality: 88 })
         .toBuffer();
     } catch (err) {
