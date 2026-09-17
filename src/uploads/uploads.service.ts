@@ -18,12 +18,10 @@ import { PresignFileDto } from "./dto/presign-upload.dto";
 // Pre-baked watermark PNG (277×50, gold text on navy, generated at build time).
 // Loaded once at module load — avoids any runtime font dependency.
 const WATERMARK_PNG: Buffer = (() => {
-  try {
-    return readFileSync(join(__dirname, "watermark.png"));
-  } catch {
-    // Fallback: also try relative to source root (ts-node / dev mode)
-    return readFileSync(join(__dirname, "../src/uploads/watermark.png"));
-  }
+  // __dirname in production: /app/dist/src/uploads
+  // __dirname in ts-node dev:  /app/src/uploads
+  // The PNG lives next to this file in both cases.
+  return readFileSync(join(__dirname, "watermark.png"));
 })();
 
 export function toR2Url(key: string): string {
@@ -165,22 +163,22 @@ export class UploadsService implements OnModuleInit {
   private async applyWatermark(input: Buffer): Promise<Buffer> {
     try {
       const meta = await sharp(input).metadata();
-      const width  = meta.width  ?? 800;
+      const width = meta.width ?? 800;
       const height = meta.height ?? 600;
 
       // Scale the pre-baked watermark PNG to ~28% of the image width.
       const targetW = Math.max(180, Math.round(width * 0.28));
-      const scaled  = await sharp(WATERMARK_PNG)
+      const scaled = await sharp(WATERMARK_PNG)
         .resize(targetW, null, { fit: "inside" })
         .toBuffer();
       const scaledMeta = await sharp(scaled).metadata();
-      const wW = scaledMeta.width  ?? targetW;
+      const wW = scaledMeta.width ?? targetW;
       const wH = scaledMeta.height ?? 50;
 
-      const marginRight  = Math.round(width  * 0.025);
+      const marginRight = Math.round(width * 0.025);
       const marginBottom = Math.round(height * 0.03);
-      const left = Math.max(0, width  - wW - marginRight);
-      const top  = Math.max(0, height - wH - marginBottom);
+      const left = Math.max(0, width - wW - marginRight);
+      const top = Math.max(0, height - wH - marginBottom);
 
       return await sharp(input)
         .composite([{ input: scaled, top, left }])
