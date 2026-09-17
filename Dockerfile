@@ -30,6 +30,8 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY package.json ./
 COPY docker-entrypoint.sh ./
+# Copy the pre-baked watermark PNG so it is available at runtime next to the compiled JS
+COPY src/uploads/watermark.png ./dist/uploads/watermark.png
 RUN chmod +x ./docker-entrypoint.sh
 
 EXPOSE 3000
