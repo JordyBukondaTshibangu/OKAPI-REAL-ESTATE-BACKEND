@@ -2,20 +2,33 @@ import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { NestExpressApplication } from "@nestjs/platform-express";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
-import { mkdirSync } from "fs";
-import { join } from "path";
 import { AppModule } from "./app.module";
 
-async function bootstrap() {
-  console.log("[boot] starting, cwd =", process.cwd(), "PORT =", process.env.PORT);
+// ---------------------------------------------------------------------------
+// Required environment variable check — crash fast in production if missing.
+// ---------------------------------------------------------------------------
+function checkEnv() {
+  const required = ["DATABASE_URL", "JWT_SECRET", "R2_ACCOUNT_ID", "R2_BUCKET_NAME", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_PUBLIC_URL"];
+  const missing = required.filter((k) => !process.env[k]);
+  if (missing.length) {
+    console.error(`[boot] ❌ Missing required environment variables: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  if (process.env.JWT_SECRET === "secret") {
+    console.error("[boot] ❌ JWT_SECRET is set to the insecure default 'secret' — set a strong random value in production.");
+    process.exit(1);
+  }
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[boot] ⚠️  RESEND_API_KEY not set — transactional emails (OTP, admin notifications) will not be sent.");
+  }
+}
 
-  mkdirSync(join(process.cwd(), "uploads", "avatars"), { recursive: true });
-  console.log("[boot] uploads dir ready");
+async function bootstrap() {
+  checkEnv();
+  console.log("[boot] starting, cwd =", process.cwd(), "PORT =", process.env.PORT);
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   console.log("[boot] Nest app created");
-
-  app.useStaticAssets(join(process.cwd(), "uploads"), { prefix: "/uploads" });
 
   const config = new DocumentBuilder()
     .setTitle("Okapi Real Estate API")
@@ -24,13 +37,29 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
 
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup("api", app, documentFactory);
-  console.log("[boot] swagger set up");
+  // Only expose Swagger in non-production environments.
+  if (process.env.NODE_ENV !== "production") {
+    const documentFactory = () => SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup("api", app, documentFactory);
+    console.log("[boot] swagger set up (dev only)");
+  } else {
+    console.log("[boot] swagger disabled in production");
+  }
 
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+
+  // Derive allowed origins from env — supports multiple comma-separated values.
+  // Falls back to localhost for local development only.
+  const rawOrigins = process.env.CORS_ORIGINS ?? process.env.FRONTEND_URL ?? "";
+  const allowedOrigins = rawOrigins
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:3001", "http://localhost:3000"];
+  console.log("[boot] CORS origins:", corsOrigin);
+
   app.enableCors({
-    origin: ["http://localhost:3001", "http://localhost:3000"],
+    origin: corsOrigin,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
