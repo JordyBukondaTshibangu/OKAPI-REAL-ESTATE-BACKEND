@@ -1,4 +1,11 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit, OnModuleDestroy, BadRequestException } from "@nestjs/common";
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+  OnModuleDestroy,
+  BadRequestException,
+} from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { MailService } from "../mail/mail.service";
 import { CreateAlertDto } from "./dto/create-alert.dto";
@@ -19,7 +26,10 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
   // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   onModuleInit() {
-    // Fire at the top of every hour (no external scheduler package needed)
+    // Run once shortly after boot so a fresh deploy doesn't wait up to 60 min
+    setTimeout(() => void this.processPropertyAlerts(), 5_000);
+
+    // Then align to the top of every hour
     const now = new Date();
     const msToNextHour =
       (60 - now.getMinutes()) * 60_000 -
@@ -73,20 +83,26 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
    * returns the existing alert instead of creating a duplicate.
    */
   async createFromFavourite(userId: string, propertyId: string) {
-    const property = await this.prisma.property.findUnique({ where: { id: propertyId } });
+    const property = await this.prisma.property.findUnique({
+      where: { id: propertyId },
+    });
     if (!property) throw new NotFoundException("Property not found");
 
     // Map property listingType (sale|rent) to alert convention (for-sale|for-rent)
     const alertListingType =
-      property.listingType === "sale" ? "for-sale"
-      : property.listingType === "rent" ? "for-rent"
-      : null;
+      property.listingType === "sale"
+        ? "for-sale"
+        : property.listingType === "rent"
+          ? "for-rent"
+          : null;
 
     // Avoid duplicates: find existing alert with same key fields
     const existing = await this.prisma.alert.findFirst({
       where: {
         userId,
-        ...(property.suburb ? { suburb: { equals: property.suburb, mode: "insensitive" } } : {}),
+        ...(property.suburb
+          ? { suburb: { equals: property.suburb, mode: "insensitive" } }
+          : {}),
         ...(property.category ? { category: property.category } : {}),
         ...(alertListingType ? { listingType: alertListingType } : {}),
       },
@@ -95,14 +111,25 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
 
     // Build a human-readable name
     const catMap: Record<string, string> = {
-      apartment: "Appartement", studio: "Studio", villa: "Villa",
-      townhouse: "Maison de ville", land: "Terrain", office: "Bureau",
-      shop: "Commerce", warehouse: "Entrepôt",
+      apartment: "Appartement",
+      studio: "Studio",
+      villa: "Villa",
+      townhouse: "Maison de ville",
+      land: "Terrain",
+      office: "Bureau",
+      shop: "Commerce",
+      warehouse: "Entrepôt",
     };
     const nameParts = [
-      property.category ? (catMap[property.category] ?? property.category) : null,
+      property.category
+        ? (catMap[property.category] ?? property.category)
+        : null,
       property.suburb ?? property.city,
-      alertListingType === "for-rent" ? "à louer" : alertListingType === "for-sale" ? "à vendre" : null,
+      alertListingType === "for-rent"
+        ? "à louer"
+        : alertListingType === "for-sale"
+          ? "à vendre"
+          : null,
     ].filter(Boolean);
 
     const alert = await this.prisma.alert.create({
@@ -121,7 +148,9 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getMatchingProperties(userId: string, alertId: string) {
-    const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
+    const alert = await this.prisma.alert.findUnique({
+      where: { id: alertId },
+    });
     if (!alert || alert.userId !== userId)
       throw new NotFoundException("Alert not found");
     return this.buildPropertyQuery(alert);
@@ -133,20 +162,12 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
   async processPropertyAlerts() {
     this.logger.log("⏰ Running property alert cron…");
 
-    type AlertWithUser = {
-      id: string; userId: string; name: string;
-      listingType: string | null; category: string | null;
-      city: string | null; suburb: string | null;
-      minPrice: number | null; maxPrice: number | null;
-      minBedrooms: number | null; maxBedrooms: number | null;
-      active: boolean; lastSentAt: Date | null; createdAt: Date;
-      user: { email: string; firstName: string; expoPushToken: string | null };
-    };
-    // lastSentAt exists in DB via raw migration — re-run `prisma generate` locally to remove cast
-    const searches = (await this.prisma.alert.findMany({
+    const searches = await this.prisma.alert.findMany({
       where: { active: true },
-      include: { user: { select: { email: true, firstName: true, expoPushToken: true } } },
-    })) as unknown as AlertWithUser[];
+      include: {
+        user: { select: { email: true, firstName: true, expoPushToken: true } },
+      },
+    });
 
     let sent = 0;
     for (const alert of searches) {
@@ -200,24 +221,28 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
               const tickets = await this.expo.sendPushNotificationsAsync(chunk);
               for (const ticket of tickets) {
                 if (ticket.status === "error") {
-                  this.logger.warn(`Push error for alert ${alert.id}: ${ticket.message}`);
+                  this.logger.warn(
+                    `Push error for alert ${alert.id}: ${ticket.message}`,
+                  );
                   // If the token is invalid, clear it so we don't keep trying
                   if (ticket.details?.error === "DeviceNotRegistered") {
-                    await this.prisma.user.update({
-                      where: { id: alert.userId },
-                      data: { expoPushToken: null },
-                    }).catch(() => {});
+                    await this.prisma.user
+                      .update({
+                        where: { id: alert.userId },
+                        data: { expoPushToken: null },
+                      })
+                      .catch(() => {});
                   }
                 }
               }
             }
           } catch (pushErr) {
-            this.logger.warn(`Push send failed for alert ${alert.id}: ${pushErr}`);
+            this.logger.warn(
+              `Push send failed for alert ${alert.id}: ${pushErr}`,
+            );
           }
         }
 
-        // Use raw query because Prisma client may not yet have lastSentAt
-        // in its generated types (run `prisma generate` after migration).
         await this.prisma.$executeRaw`
           UPDATE "Alert" SET "lastSentAt" = NOW() WHERE id = ${alert.id}
         `;
@@ -228,7 +253,9 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    this.logger.log(`✅ Property alerts: ${sent}/${searches.length} sent (email + push)`);
+    this.logger.log(
+      `✅ Property alerts: ${sent}/${searches.length} sent (email + push)`,
+    );
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -242,7 +269,7 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
     maxPrice?: number | null;
     minBedrooms?: number | null;
     maxBedrooms?: number | null;
-    lastSentAt?: Date | null; // exists in DB; added via raw migration
+    lastSentAt?: Date | null;
     createdAt?: Date;
   }) {
     // Alerts store "for-sale"/"for-rent"; properties store "sale"/"rent"
@@ -251,7 +278,7 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
         ? "sale"
         : alert.listingType === "for-rent"
           ? "rent"
-          : alert.listingType ?? undefined;
+          : (alert.listingType ?? undefined);
 
     // Only notify about listings published AFTER the alert was created (floor),
     // or after the last notification was sent (subsequent runs).
@@ -319,8 +346,10 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
     if (alert.listingType === "for-rent") parts.push("à louer");
     else if (alert.listingType === "for-sale") parts.push("à vendre");
     if (alert.minBedrooms) parts.push(`${alert.minBedrooms}+ ch.`);
-    if (alert.maxPrice) parts.push(`≤ ${alert.maxPrice.toLocaleString("fr-FR")} $`);
-    else if (alert.minPrice) parts.push(`≥ ${alert.minPrice.toLocaleString("fr-FR")} $`);
+    if (alert.maxPrice)
+      parts.push(`≤ ${alert.maxPrice.toLocaleString("fr-FR")} $`);
+    else if (alert.minPrice)
+      parts.push(`≥ ${alert.minPrice.toLocaleString("fr-FR")} $`);
 
     return parts.join(" · ") || "Toutes annonces";
   }

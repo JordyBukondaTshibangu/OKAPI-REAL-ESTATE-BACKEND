@@ -11,6 +11,7 @@ import {
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { JwtUserGuard } from "../auth/guards/jwt-user.guard";
+import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
 import { AlertsService } from "./alerts.service";
 import { CreateAlertDto } from "./dto/create-alert.dto";
 import { UpdateAlertDto } from "./dto/update-alert.dto";
@@ -34,7 +35,9 @@ export class AlertsController {
     return this.alertsService.getMyAlerts(req.user.userId);
   }
 
-  @ApiOperation({ summary: "Create alert pre-filled from a favourite property (idempotent)" })
+  @ApiOperation({
+    summary: "Create alert pre-filled from a favourite property (idempotent)",
+  })
   @Post("from-favourite/:propertyId")
   createFromFavourite(
     @Request() req: any,
@@ -63,5 +66,13 @@ export class AlertsController {
   @Delete(":id")
   delete(@Request() req: any, @Param("id") id: string) {
     return this.alertsService.delete(req.user.userId, id);
+  }
+
+  @ApiOperation({ summary: "Manually trigger the alert job (admin only)" })
+  @UseGuards(JwtAdminGuard)
+  @Post("admin/trigger")
+  async triggerAlerts() {
+    await this.alertsService.processPropertyAlerts();
+    return { message: "Alert job completed" };
   }
 }
