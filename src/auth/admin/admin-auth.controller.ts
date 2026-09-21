@@ -12,7 +12,6 @@ export class AdminAuthController {
   @ApiOperation({ summary: "Admin login" })
   @Post("login")
   login(@Body() dto: AdminLoginDto) {
-    console.log("Loagin in")
     return this.adminAuthService.login(dto);
   }
 

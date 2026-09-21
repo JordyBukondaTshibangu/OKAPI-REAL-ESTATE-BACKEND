@@ -38,7 +38,16 @@ export class UserAuthService {
       },
     });
     void this.mail.sendWelcome(user.email, user.firstName);
-    return { access_token: this.jwt.sign({ sub: user.id, role: "user" }) };
+    const {
+      passwordHash: _ph,
+      resetToken: _rt,
+      resetTokenExpiry: _rte,
+      ...safeUser
+    } = user;
+    return {
+      access_token: this.jwt.sign({ sub: user.id, role: "user" }),
+      user: safeUser,
+    };
   }
 
   async login(dto: LoginDto) {

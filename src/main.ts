@@ -5,27 +5,57 @@ import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { AppModule } from "./app.module";
 
 // ---------------------------------------------------------------------------
+// Load .env file before anything else (Railway / production injects env vars
+// directly, so this is a no-op there; locally it populates process.env).
+// process.loadEnvFile() is built into Node.js ≥ 20.12 — no extra package.
+// ---------------------------------------------------------------------------
+try {
+  (process as any).loadEnvFile(".env");
+} catch {
+  // File not present (e.g. CI or production with injected vars) — fine.
+}
+
+// ---------------------------------------------------------------------------
 // Required environment variable check — crash fast in production if missing.
 // ---------------------------------------------------------------------------
 function checkEnv() {
-  const required = ["DATABASE_URL", "JWT_SECRET", "R2_ACCOUNT_ID", "R2_BUCKET_NAME", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_PUBLIC_URL"];
+  const required = [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "R2_ACCOUNT_ID",
+    "R2_BUCKET_NAME",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_PUBLIC_URL",
+  ];
   const missing = required.filter((k) => !process.env[k]);
   if (missing.length) {
-    console.error(`[boot] ❌ Missing required environment variables: ${missing.join(", ")}`);
+    console.error(
+      `[boot] ❌ Missing required environment variables: ${missing.join(", ")}`,
+    );
     process.exit(1);
   }
   if (process.env.JWT_SECRET === "secret") {
-    console.error("[boot] ❌ JWT_SECRET is set to the insecure default 'secret' — set a strong random value in production.");
+    console.error(
+      "[boot] ❌ JWT_SECRET is set to the insecure default 'secret' — set a strong random value in production.",
+    );
     process.exit(1);
   }
   if (!process.env.RESEND_API_KEY) {
-    console.warn("[boot] ⚠️  RESEND_API_KEY not set — transactional emails (OTP, admin notifications) will not be sent.");
+    console.warn(
+      "[boot] ⚠️  RESEND_API_KEY not set — transactional emails (OTP, admin notifications) will not be sent.",
+    );
   }
 }
 
 async function bootstrap() {
   checkEnv();
-  console.log("[boot] starting, cwd =", process.cwd(), "PORT =", process.env.PORT);
+  console.log(
+    "[boot] starting, cwd =",
+    process.cwd(),
+    "PORT =",
+    process.env.PORT,
+  );
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   console.log("[boot] Nest app created");
@@ -55,7 +85,10 @@ async function bootstrap() {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
-  const corsOrigin = allowedOrigins.length > 0 ? allowedOrigins : ["http://localhost:3001", "http://localhost:3000"];
+  const corsOrigin =
+    allowedOrigins.length > 0
+      ? allowedOrigins
+      : ["http://localhost:3001", "http://localhost:3000"];
   console.log("[boot] CORS origins:", corsOrigin);
 
   app.enableCors({

@@ -206,6 +206,7 @@ export class AgentsService {
         idDocumentStatus: "APPROVED",
         firstListingChecked: true,
         verifiedAt: new Date(),
+        emailVerified: true, // admin-created agents skip email verification
       },
     });
     return this.withPhotoUrl(agent);
@@ -325,6 +326,7 @@ export class AgentsService {
         verificationTier: "VERIFIE",
         verifiedAt: new Date(),
         firstListingChecked: false, // admin will review their first listing
+        emailVerified: true, // approval implies email is valid
       },
     });
     return this.withPhotoUrl(agent);
