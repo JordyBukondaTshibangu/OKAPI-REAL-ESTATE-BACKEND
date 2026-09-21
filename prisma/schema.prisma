@@ -86,6 +86,13 @@ enum ReferenceStatus {
   FLAGGED
 }
 
+enum AgentGrade {
+  NOUVEAU   // < 3 reviews or no rating yet
+  ACTIF     // ≥ 3 reviews, avg ≥ 3.5, ≥ 1 active listing
+  FIABLE    // ≥ 10 reviews, avg ≥ 4.0, ≥ 5 active listings
+  EXPERT    // ≥ 25 reviews, avg ≥ 4.5, ≥ 10 listings, ≥ 3 months, 0 suspensions
+}
+
 enum AgencyVerificationStatus {
   PENDING
   APPROVED
@@ -111,6 +118,7 @@ model User {
   resetToken        String?
   resetTokenExpiry  DateTime?
   profileImage      String?
+  expoPushToken     String?
   createdAt         DateTime  @default(now())
 
   favorites  Favorite[]
@@ -238,6 +246,9 @@ model Agent {
   subscriptionEndsAt    DateTime?
   // Tracks the last time a renewal reminder was sent so we don't spam.
   renewalReminderSentAt DateTime?
+  // Computed grade — recalculated automatically after every review change.
+  grade           AgentGrade @default(NOUVEAU)
+
   // Whether the agent has been manually suspended by an admin.
   isSuspended     Boolean   @default(false)
   suspendedAt     DateTime?
@@ -485,8 +496,21 @@ model Review {
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   agentId    String?
   agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  // Global rating (1-5)
   rating     Int
+
+  // Optional sub-ratings (1-5 each)
+  ratingReactivite        Int?  // speed of response
+  ratingHonnetete         Int?  // listing matches reality
+  ratingProfessionnalisme Int?  // professional conduct
+
   comment    String?
+
+  // Moderation — admin approves before public display
+  isVisible  Boolean  @default(false)
+  isVerified Boolean  @default(false)  // WhatsApp contact confirmed
+
   createdAt  DateTime  @default(now())
 
   @@unique([userId, agentId])

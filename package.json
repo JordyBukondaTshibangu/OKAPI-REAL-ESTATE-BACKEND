@@ -23,7 +23,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
-    "sharp": "^0.33.5",
     "@aws-sdk/s3-request-presigner": "^3.1063.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
@@ -39,13 +38,15 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "date-fns": "^4.4.0",
+    "expo-server-sdk": "^3.15.0",
     "nodemailer": "^6.9.15",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.14.0",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

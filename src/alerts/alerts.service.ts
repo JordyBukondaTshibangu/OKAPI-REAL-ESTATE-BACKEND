@@ -3,11 +3,13 @@ import { PrismaService } from "../prisma/prisma.service";
 import { MailService } from "../mail/mail.service";
 import { CreateAlertDto } from "./dto/create-alert.dto";
 import { UpdateAlertDto } from "./dto/update-alert.dto";
+import Expo, { ExpoPushMessage } from "expo-server-sdk";
 
 @Injectable()
 export class AlertsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AlertsService.name);
   private alertTimer: NodeJS.Timeout | null = null;
+  private readonly expo = new Expo();
 
   constructor(
     private prisma: PrismaService,
@@ -138,12 +140,12 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
       minPrice: number | null; maxPrice: number | null;
       minBedrooms: number | null; maxBedrooms: number | null;
       active: boolean; lastSentAt: Date | null; createdAt: Date;
-      user: { email: string; firstName: string };
+      user: { email: string; firstName: string; expoPushToken: string | null };
     };
     // lastSentAt exists in DB via raw migration — re-run `prisma generate` locally to remove cast
     const searches = (await this.prisma.alert.findMany({
       where: { active: true },
-      include: { user: { select: { email: true, firstName: true } } },
+      include: { user: { select: { email: true, firstName: true, expoPushToken: true } } },
     })) as unknown as AlertWithUser[];
 
     let sent = 0;
@@ -177,6 +179,43 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
           })),
         );
 
+        // Send push notification if the user has a registered Expo token
+        const pushToken = alert.user.expoPushToken;
+        if (pushToken && Expo.isExpoPushToken(pushToken)) {
+          const count = matches.length;
+          const body =
+            count === 1
+              ? `1 nouveau bien correspond à votre alerte "${alert.name}"`
+              : `${count} nouveaux biens correspondent à votre alerte "${alert.name}"`;
+          const message: ExpoPushMessage = {
+            to: pushToken,
+            sound: "default",
+            title: "🏠 Nouvelle annonce Okapi",
+            body,
+            data: { alertId: alert.id, screen: "alerts" },
+          };
+          try {
+            const chunks = this.expo.chunkPushNotifications([message]);
+            for (const chunk of chunks) {
+              const tickets = await this.expo.sendPushNotificationsAsync(chunk);
+              for (const ticket of tickets) {
+                if (ticket.status === "error") {
+                  this.logger.warn(`Push error for alert ${alert.id}: ${ticket.message}`);
+                  // If the token is invalid, clear it so we don't keep trying
+                  if (ticket.details?.error === "DeviceNotRegistered") {
+                    await this.prisma.user.update({
+                      where: { id: alert.userId },
+                      data: { expoPushToken: null },
+                    }).catch(() => {});
+                  }
+                }
+              }
+            }
+          } catch (pushErr) {
+            this.logger.warn(`Push send failed for alert ${alert.id}: ${pushErr}`);
+          }
+        }
+
         // Use raw query because Prisma client may not yet have lastSentAt
         // in its generated types (run `prisma generate` after migration).
         await this.prisma.$executeRaw`
@@ -189,7 +228,7 @@ export class AlertsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    this.logger.log(`✅ Property alerts: ${sent}/${searches.length} emails sent`);
+    this.logger.log(`✅ Property alerts: ${sent}/${searches.length} sent (email + push)`);
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────

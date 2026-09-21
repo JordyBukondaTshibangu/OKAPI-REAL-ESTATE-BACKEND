@@ -13,6 +13,7 @@ import { AuthModule } from "./auth/auth.module";
 import { EnquiriesModule } from "./enquiries/enquiries.module";
 import { FavoritesModule } from "./favorites/favorites.module";
 import { MailModule } from "./mail/mail.module";
+import { WhatsappModule } from "./whatsapp/whatsapp.module";
 import { PrismaModule } from "./prisma/prisma.module";
 import { PropertiesModule } from "./properties/properties.module";
 import { ReviewsModule } from "./reviews/reviews.module";
@@ -26,6 +27,7 @@ import { AppService } from "./app.service";
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     MailModule,
+    WhatsappModule,
     AuthModule,
     UsersModule,
     AgenciesModule,

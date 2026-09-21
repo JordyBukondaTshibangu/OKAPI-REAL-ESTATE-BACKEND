@@ -110,28 +110,89 @@ export class AgentsService {
         take: limit,
         where,
         orderBy,
-        include: { agency: true, areasOfExpertise: true, trackRecord: true },
+        include: {
+          agency: true,
+          areasOfExpertise: true,
+          trackRecord: true,
+        },
       }),
       this.prisma.agent.count({ where }),
     ]);
+
+    // Compute real counts live so stored counters can never be stale
+    const agentIds = data.map((a) => a.id);
+    const [saleCounts, rentCounts, reviewCounts, ratingAggs] = await Promise.all([
+      this.prisma.property.groupBy({
+        by: ['agentId'],
+        where: { agentId: { in: agentIds }, status: 'LIVE', isPublished: true, listingType: 'sale' },
+        _count: { _all: true },
+      }),
+      this.prisma.property.groupBy({
+        by: ['agentId'],
+        where: { agentId: { in: agentIds }, status: 'LIVE', isPublished: true, listingType: 'rent' },
+        _count: { _all: true },
+      }),
+      // Total review count (all reviews, including pending moderation)
+      this.prisma.review.groupBy({
+        by: ['agentId'],
+        where: { agentId: { in: agentIds } },
+        _count: { _all: true },
+      }),
+      // Average rating of visible (approved) reviews only
+      this.prisma.review.groupBy({
+        by: ['agentId'],
+        where: { agentId: { in: agentIds }, isVisible: true },
+        _avg: { rating: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const saleMap = new Map(saleCounts.map((r) => [r.agentId, r._count._all]));
+    const rentMap = new Map(rentCounts.map((r) => [r.agentId, r._count._all]));
+    const reviewCountMap = new Map(reviewCounts.map((r) => [r.agentId, r._count._all]));
+    const ratingMap = new Map(ratingAggs.map((r) => [r.agentId, r._avg?.rating ?? 0]));
+
     return {
-      data: data.map((agent) => this.withPhotoUrl(agent)),
+      data: data.map((agent) => ({
+        ...this.withPhotoUrl(agent),
+        forSaleCount: saleMap.get(agent.id) ?? 0,
+        forRentCount: rentMap.get(agent.id) ?? 0,
+        ratingsCount: reviewCountMap.get(agent.id) ?? 0,
+        rating: Math.round((ratingMap.get(agent.id) ?? 0) * 10) / 10,
+      })),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
 
   async findOne(id: string) {
-    const agent = await this.prisma.agent.findUnique({
-      where: { id },
-      include: {
-        agency: true,
-        areasOfExpertise: true,
-        trackRecord: true,
-        properties: true,
-      },
-    });
+    const [agent, saleCount, rentCount, reviewTotal, ratingAgg] = await Promise.all([
+      this.prisma.agent.findUnique({
+        where: { id },
+        include: {
+          agency: true,
+          areasOfExpertise: true,
+          trackRecord: true,
+          properties: true,
+        },
+      }),
+      this.prisma.property.count({ where: { agentId: id, status: 'LIVE', isPublished: true, listingType: 'sale' } }),
+      this.prisma.property.count({ where: { agentId: id, status: 'LIVE', isPublished: true, listingType: 'rent' } }),
+      // Total review count (all reviews)
+      this.prisma.review.count({ where: { agentId: id } }),
+      // Average rating of visible reviews only
+      this.prisma.review.aggregate({
+        where: { agentId: id, isVisible: true },
+        _avg: { rating: true },
+      }),
+    ]);
     if (!agent) throw new NotFoundException("Agent not found");
-    return this.withPhotoUrl(agent);
+    return {
+      ...this.withPhotoUrl(agent),
+      forSaleCount: saleCount,
+      forRentCount: rentCount,
+      ratingsCount: reviewTotal,
+      rating: Math.round((ratingAgg._avg?.rating ?? 0) * 10) / 10,
+    };
   }
 
   async create(dto: CreateAgentDto) {

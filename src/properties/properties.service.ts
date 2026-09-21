@@ -684,6 +684,27 @@ export class PropertiesService {
     if (!["DRAFT", "HIDDEN", "REJECTED"].includes(property.status))
       throw new BadRequestException(`Cannot submit a listing with status ${property.status}`);
 
+    // WhatsApp / phone validation — buyers need a way to contact the agent
+    const agent = await this.prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { phoneNumber: true, whatsappNumber: true },
+    });
+    if (!agent?.phoneNumber && !agent?.whatsappNumber)
+      throw new BadRequestException(
+        "Ajoutez un numéro WhatsApp ou un numéro de téléphone dans votre profil avant de soumettre une annonce. C'est le canal de contact principal des acheteurs.",
+      );
+
+    // Photo count validation
+    const photoCount = property.gallery?.length ?? 0;
+    if (photoCount < 3)
+      throw new BadRequestException(
+        `Minimum 3 photos requises pour soumettre une annonce (vous en avez ${photoCount}). Ajoutez au moins ${3 - photoCount} photo(s) supplémentaire(s).`,
+      );
+    if (photoCount > 15)
+      throw new BadRequestException(
+        `Maximum 15 photos par annonce. Supprimez ${photoCount - 15} photo(s).`,
+      );
+
     return this.prisma.property.update({
       where: { id },
       data: { status: "PENDING", isPublished: false },

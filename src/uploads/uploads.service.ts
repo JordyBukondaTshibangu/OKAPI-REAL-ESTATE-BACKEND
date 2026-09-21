@@ -11,17 +11,26 @@ import { Readable } from "stream";
 import sharp from "sharp";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "crypto";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { PresignFileDto } from "./dto/presign-upload.dto";
 
 // Pre-baked watermark PNG (277×50, gold text on navy, generated at build time).
 // Loaded once at module load — avoids any runtime font dependency.
 const WATERMARK_PNG: Buffer = (() => {
-  // __dirname in production: /app/dist/src/uploads
-  // __dirname in ts-node dev:  /app/src/uploads
-  // The PNG lives next to this file in both cases.
-  return readFileSync(join(__dirname, "watermark.png"));
+  // Try multiple candidate paths so this works whether running from:
+  //   - compiled dist  (__dirname = .../dist/src/uploads)
+  //   - ts-node dev    (__dirname = .../src/uploads)
+  //   - project root fallback
+  const candidates = [
+    join(__dirname, "watermark.png"),
+    join(__dirname, "..", "..", "..", "src", "uploads", "watermark.png"),
+    join(process.cwd(), "src", "uploads", "watermark.png"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return readFileSync(p);
+  }
+  throw new Error(`watermark.png not found. Tried:\n${candidates.join("\n")}`);
 })();
 
 export function toR2Url(key: string): string {
@@ -194,6 +203,29 @@ export class UploadsService implements OnModuleInit {
   }
 
   /**
+   * Validates photo dimensions — throws if any image is below the minimum size.
+   * Called before watermarking so we reject bad photos early.
+   */
+  private async validatePhotoDimensions(input: Buffer, filename: string): Promise<void> {
+    const MIN_WIDTH = 800;
+    const MIN_HEIGHT = 600;
+    try {
+      const meta = await sharp(input).metadata();
+      const w = meta.width ?? 0;
+      const h = meta.height ?? 0;
+      if (w < MIN_WIDTH || h < MIN_HEIGHT) {
+        throw new Error(
+          `Photo "${filename}" trop petite (${w}×${h} px). Minimum requis : ${MIN_WIDTH}×${MIN_HEIGHT} px.`,
+        );
+      }
+    } catch (err: any) {
+      // Re-throw dimension errors; swallow unreadable format errors gracefully
+      if (err.message?.includes("trop petite")) throw err;
+      console.warn(`[uploads] Could not read metadata for ${filename}:`, err.message);
+    }
+  }
+
+  /**
    * Downloads each tmp/ image, stamps the Okapi watermark, uploads to the
    * permanent properties/{propertyId}/ key, then deletes the tmp/ originals.
    * Returns the new permanent keys in the same order as the input.
@@ -204,8 +236,9 @@ export class UploadsService implements OnModuleInit {
         const filename = tmpKey.split("/").pop();
         const newKey = `properties/${propertyId}/${filename}`;
 
-        // Download → watermark → re-upload (instead of a plain server-side copy)
+        // Download → validate dimensions → watermark → re-upload
         const original = await this.downloadKey(tmpKey);
+        await this.validatePhotoDimensions(original, filename ?? tmpKey);
         const watermarked = await this.applyWatermark(original);
 
         await this.client.send(

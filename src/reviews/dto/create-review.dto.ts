@@ -22,6 +22,27 @@ export class CreateReviewDto {
   @Max(5)
   rating: number;
 
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, description: "Speed of response" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  ratingReactivite?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, description: "Listing matches reality" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  ratingHonnetete?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, description: "Professional conduct" })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  ratingProfessionnalisme?: number;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

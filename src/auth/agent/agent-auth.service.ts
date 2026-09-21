@@ -10,6 +10,7 @@ import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
 import { MailService } from "../../mail/mail.service";
+import { WhatsappService } from "../../whatsapp/whatsapp.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CompleteAgentProfileDto } from "./dto/complete-agent-profile.dto";
 import { ForgotPasswordAgentDto } from "./dto/forgot-password-agent.dto";
@@ -23,6 +24,7 @@ export class AgentAuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private mail: MailService,
+    private whatsapp: WhatsappService,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -72,9 +74,13 @@ export class AgentAuthService {
       },
     });
 
-    // Await in dev so SMTP errors surface immediately in the terminal.
-    // In production you may want to fire-and-forget once SMTP is confirmed working.
-    await this.mail.sendAgentEmailOtp(agent.email!, agent.name, code);
+    // Send OTP via email (primary) + WhatsApp (secondary) in parallel.
+    // WhatsApp uses whatsappNumber if provided, falls back to phoneNumber.
+    const waPhone = agent.whatsappNumber ?? agent.phoneNumber;
+    await Promise.all([
+      this.mail.sendAgentEmailOtp(agent.email!, agent.name, code),
+      this.whatsapp.sendAgentOtp(waPhone, agent.name, code),
+    ]);
 
     return {
       access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
@@ -85,7 +91,7 @@ export class AgentAuthService {
         verificationTier: agent.verificationTier,
         emailVerified: agent.emailVerified,
       },
-      message: "Account created — check your email for a verification code.",
+      message: "Account created — check your email or WhatsApp for a verification code.",
     };
   }
 
@@ -130,7 +136,14 @@ export class AgentAuthService {
   async resendVerificationEmail(agentId: string) {
     const agent = await this.prisma.agent.findUnique({
       where: { id: agentId },
-      select: { email: true, name: true, emailVerified: true, emailOtpExpiry: true },
+      select: {
+        email: true,
+        name: true,
+        emailVerified: true,
+        emailOtpExpiry: true,
+        phoneNumber: true,
+        whatsappNumber: true,
+      },
     });
     if (!agent) throw new UnauthorizedException("Agent not found");
     if (agent.emailVerified) {
@@ -154,8 +167,12 @@ export class AgentAuthService {
       data: { emailOtpCode: code, emailOtpExpiry: expiry },
     });
 
-    await this.mail.sendAgentEmailOtp(agent.email!, agent.name, code);
-    return { message: "Verification code resent — check your email." };
+    const waPhone = agent.whatsappNumber ?? agent.phoneNumber;
+    await Promise.all([
+      this.mail.sendAgentEmailOtp(agent.email!, agent.name, code),
+      this.whatsapp.sendAgentOtp(waPhone, agent.name, code),
+    ]);
+    return { message: "Verification code resent — check your email or WhatsApp." };
   }
 
   /**

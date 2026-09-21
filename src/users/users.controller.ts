@@ -8,11 +8,18 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { IsString, IsNotEmpty } from "class-validator";
 import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
 import { JwtUserGuard } from "../auth/guards/jwt-user.guard";
 import { UpdateAvatarDto } from "./dto/update-avatar.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { UsersService } from "./users.service";
+
+class SavePushTokenDto {
+  @IsString()
+  @IsNotEmpty()
+  token!: string;
+}
 
 @ApiTags("Users")
 @ApiBearerAuth()
@@ -56,6 +63,13 @@ export class UsersController {
   @Delete("me/avatar")
   removeAvatar(@Request() req: any) {
     return this.usersService.removeAvatar(req.user.userId);
+  }
+
+  @ApiOperation({ summary: "Save Expo push token for mobile notifications" })
+  @UseGuards(JwtUserGuard)
+  @Patch("me/push-token")
+  savePushToken(@Request() req: any, @Body() dto: SavePushTokenDto) {
+    return this.usersService.savePushToken(req.user.userId, dto.token);
   }
 
   @ApiOperation({ summary: "Delete my account" })

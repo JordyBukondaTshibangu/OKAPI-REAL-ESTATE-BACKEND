@@ -4,11 +4,13 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Request,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
 import { JwtUserGuard } from "../auth/guards/jwt-user.guard";
 import { CreateReviewDto } from "./dto/create-review.dto";
 import { ReviewsService } from "./reviews.service";
@@ -52,5 +54,31 @@ export class ReviewsController {
   @Delete(":id")
   delete(@Request() req: any, @Param("id") id: string) {
     return this.reviewsService.delete(req.user.userId, id);
+  }
+
+  // ─── Admin ──────────────────────────────────────────────────────────────────
+
+  @ApiOperation({ summary: "Admin: list pending reviews awaiting moderation" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAdminGuard)
+  @Get("admin/pending")
+  getPendingReviews() {
+    return this.reviewsService.getPendingReviews();
+  }
+
+  @ApiOperation({ summary: "Admin: approve a review (make visible)" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAdminGuard)
+  @Patch("admin/:id/approve")
+  approveReview(@Param("id") id: string) {
+    return this.reviewsService.approve(id);
+  }
+
+  @ApiOperation({ summary: "Admin: reject a review (hide)" })
+  @ApiBearerAuth()
+  @UseGuards(JwtAdminGuard)
+  @Patch("admin/:id/reject")
+  rejectReview(@Param("id") id: string) {
+    return this.reviewsService.reject(id);
   }
 }

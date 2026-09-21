@@ -85,6 +85,21 @@ export class UsersService {
     return this.withAvatarUrl(user);
   }
 
+  async savePushToken(userId: string, token: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { expoPushToken: token },
+    });
+    return { message: "Push token saved" };
+  }
+
+  async clearPushToken(userId: string) {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { expoPushToken: null },
+    });
+  }
+
   async countAll(): Promise<number> {
     return this.prisma.user.count();
   }
