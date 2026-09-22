@@ -113,8 +113,9 @@ model User {
   firstName         String
   lastName          String
   email             String    @unique
-  phoneNumber       String
-  passwordHash      String
+  phoneNumber       String?   // optional for Google sign-in users
+  passwordHash      String?   // optional for Google sign-in users
+  googleId          String?   @unique
   resetToken        String?
   resetTokenExpiry  DateTime?
   profileImage      String?

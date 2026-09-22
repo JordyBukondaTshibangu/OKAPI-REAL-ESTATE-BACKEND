@@ -7,6 +7,7 @@ import { AdminAuthService } from "./admin/admin-auth.service";
 import { AgentAuthController } from "./agent/agent-auth.controller";
 import { AgentAuthService } from "./agent/agent-auth.service";
 import { GoogleAgentStrategy } from "./strategies/google-agent.strategy";
+import { GoogleUserStrategy } from "./strategies/google-user.strategy";
 import { JwtAdminStrategy } from "./strategies/jwt-admin.strategy";
 import { JwtAgentStrategy } from "./strategies/jwt-agent.strategy";
 import { JwtUserStrategy } from "./strategies/jwt-user.strategy";
@@ -31,6 +32,7 @@ import { UserAuthService } from "./user/user-auth.service";
     JwtAdminStrategy,
     JwtAgentStrategy,
     GoogleAgentStrategy,
+    GoogleUserStrategy,
   ],
   exports: [JwtModule],
 })

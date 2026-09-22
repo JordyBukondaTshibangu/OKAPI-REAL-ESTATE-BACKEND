@@ -13,6 +13,7 @@ import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import type { GoogleUserProfile } from "../strategies/google-user.strategy";
 
 @Injectable()
 export class UserAuthService {
@@ -55,9 +56,71 @@ export class UserAuthService {
       where: { email: dto.email },
     });
     if (!user) throw new UnauthorizedException("Invalid credentials");
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        "Ce compte utilise Google Sign-In — veuillez vous connecter avec Google.",
+      );
+    }
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException("Invalid credentials");
     return { access_token: this.jwt.sign({ sub: user.id, role: "user" }) };
+  }
+
+  // ─── Google OAuth ─────────────────────────────────────────────────────────────
+
+  async googleLogin(profile: GoogleUserProfile) {
+    return this.findOrCreateGoogleUser(profile);
+  }
+
+  private async findOrCreateGoogleUser(profile: GoogleUserProfile) {
+    // 1. Try to find by googleId
+    let user = await (this.prisma.user as any).findUnique({
+      where: { googleId: profile.googleId },
+    });
+
+    // 2. Try to find by email and link the Google account
+    if (!user && profile.email) {
+      user = await this.prisma.user.findUnique({
+        where: { email: profile.email },
+      });
+      if (user) {
+        user = await (this.prisma.user as any).update({
+          where: { id: user.id },
+          data: {
+            googleId: profile.googleId,
+            // Use Google photo if no profile image set
+            ...(user.profileImage ? {} : { profileImage: profile.photo }),
+          },
+        });
+      }
+    }
+
+    // 3. Create a new user
+    if (!user) {
+      if (!profile.email) {
+        throw new BadRequestException(
+          "Google account has no email address — cannot create a user account",
+        );
+      }
+      user = await (this.prisma.user as any).create({
+        data: {
+          googleId:     profile.googleId,
+          firstName:    profile.firstName,
+          lastName:     profile.lastName || profile.firstName,
+          email:        profile.email,
+          profileImage: profile.photo,
+          // passwordHash intentionally null — Google-only account
+          // phoneNumber intentionally null — not provided by Google
+        },
+      });
+      void this.mail.sendWelcome(user.email, user.firstName);
+    }
+
+    const { passwordHash: _ph, resetToken: _rt, resetTokenExpiry: _rte, ...safeUser } = user;
+    return {
+      access_token: this.jwt.sign({ sub: user.id, role: "user" }),
+      user: safeUser,
+    };
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
