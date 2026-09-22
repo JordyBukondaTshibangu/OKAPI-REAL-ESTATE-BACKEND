@@ -47,6 +47,12 @@ export class UserAuthController {
     // Passport handles the redirect
   }
 
+  @ApiOperation({ summary: "Google Sign-In for mobile users — send ID token, receive JWT" })
+  @Post("google/mobile")
+  googleMobile(@Body("idToken") idToken: string) {
+    return this.userAuthService.googleMobileLogin(idToken);
+  }
+
   @ApiOperation({ summary: "Google OAuth callback for users" })
   @Get("google/callback")
   @UseGuards(AuthGuard("google-user"))

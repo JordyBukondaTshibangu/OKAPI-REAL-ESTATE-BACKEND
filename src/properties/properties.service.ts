@@ -738,6 +738,60 @@ export class PropertiesService {
     return data.map((p) => this.withPerformance(this.withGalleryUrls(p)));
   }
 
+  /**
+   * Returns groups of potentially duplicate listings for admin review.
+   * Two listings are considered duplicates when they share:
+   *   agentId + suburb + category + bedrooms AND their prices are within 10 %.
+   * Only non-hidden/pending/live listings are checked (all active statuses).
+   */
+  async findDuplicates() {
+    const all = await this.prisma.property.findMany({
+      where: { status: { in: ["PENDING", "LIVE", "HIDDEN"] } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true, title: true, status: true, price: true, currency: true,
+        suburb: true, category: true, bedrooms: true, gallery: true,
+        agentId: true, createdAt: true,
+        agent: { select: { id: true, name: true, email: true } },
+      },
+    });
+
+    type Row = (typeof all)[number];
+
+    // Group by (agentId, suburb, category, bedrooms)
+    const map = new Map<string, Row[]>();
+    for (const p of all) {
+      const key = `${p.agentId ?? "noagent"}::${p.suburb}::${p.category}::${p.bedrooms ?? 0}`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(p);
+    }
+
+    const groups: Array<{ key: string; listings: Array<Omit<Row, "gallery"> & { gallery: string[] }> }> = [];
+    for (const [key, listings] of map.entries()) {
+      if (listings.length < 2) continue;
+
+      // Include group only if at least two prices are within 10 % of each other
+      const hasSimilarPrice = listings.some((a) =>
+        listings.some(
+          (b) =>
+            a.id !== b.id &&
+            Math.abs(a.price - b.price) / Math.max(a.price, b.price, 1) <= 0.1,
+        ),
+      );
+      if (hasSimilarPrice) {
+        groups.push({
+          key,
+          listings: listings.map((p) => ({
+            ...p,
+            gallery: (p.gallery as string[]).slice(0, 1).map((g) => this.toGalleryUrl(g)),
+          })),
+        });
+      }
+    }
+
+    return groups;
+  }
+
   /** Admin approves a PENDING listing → LIVE. */
   async approve(id: string) {
     const property = await this.prisma.property.findUnique({ where: { id } });

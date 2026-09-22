@@ -144,6 +144,13 @@ export class PropertiesController {
     return this.propertiesService.findPending();
   }
 
+  /** Groups of potentially duplicate listings for admin review. */
+  @UseGuards(JwtAdminGuard)
+  @Get("admin/duplicates")
+  findDuplicates() {
+    return this.propertiesService.findDuplicates();
+  }
+
   /** Admin approves a PENDING listing → LIVE. */
   @UseGuards(JwtAdminGuard)
   @HttpCode(HttpStatus.OK)

@@ -13,6 +13,7 @@ import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { LoginDto } from "./dto/login.dto";
 import { RegisterDto } from "./dto/register.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { OAuth2Client } from "google-auth-library";
 import type { GoogleUserProfile } from "../strategies/google-user.strategy";
 
 @Injectable()
@@ -70,6 +71,30 @@ export class UserAuthService {
 
   async googleLogin(profile: GoogleUserProfile) {
     return this.findOrCreateGoogleUser(profile);
+  }
+
+  /** Mobile: verify Google ID token server-side, then find-or-create user */
+  async googleMobileLogin(idToken: string) {
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload) throw new UnauthorizedException("Invalid Google token payload");
+
+    const displayName = payload.name ?? "";
+    const spaceIdx = displayName.indexOf(" ");
+    const firstName = spaceIdx > -1 ? displayName.slice(0, spaceIdx) : displayName;
+    const lastName  = spaceIdx > -1 ? displayName.slice(spaceIdx + 1) : "";
+
+    return this.findOrCreateGoogleUser({
+      googleId:  payload.sub,
+      firstName,
+      lastName,
+      email:     payload.email ?? null,
+      photo:     payload.picture ?? null,
+    });
   }
 
   private async findOrCreateGoogleUser(profile: GoogleUserProfile) {
