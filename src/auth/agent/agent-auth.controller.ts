@@ -1,5 +1,7 @@
-import { Body, Controller, Patch, Post, Req, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { AuthGuard } from "@nestjs/passport";
 import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import type { Response } from "express";
 import { JwtAgentGuard } from "../guards/jwt-agent.guard";
 import { AgentAuthService } from "./agent-auth.service";
 import { CompleteAgentProfileDto } from "./dto/complete-agent-profile.dto";
@@ -11,6 +13,13 @@ import { VerifyEmailDto } from "./dto/verify-email.dto";
 
 interface AgentRequest {
   user: { agentId: string };
+}
+
+interface GoogleUser {
+  googleId: string;
+  name: string;
+  email: string | null;
+  photo: string | null;
 }
 
 @ApiTags("Auth - Agent")
@@ -92,5 +101,45 @@ export class AgentAuthController {
   @Post("reset-password")
   resetPassword(@Body() dto: ResetPasswordAgentDto) {
     return this.agentAuthService.resetPassword(dto);
+  }
+
+  // ─── Google OAuth (web flow) ─────────────────────────────────────────────────
+
+  /** Redirects to Google's consent screen */
+  @ApiOperation({ summary: "Initiate Google OAuth (web — redirects to Google)" })
+  @Get("google")
+  @UseGuards(AuthGuard("google-agent"))
+  googleAuth() {
+    // Passport handles the redirect
+  }
+
+  /** Google redirects here after user consent */
+  @ApiOperation({ summary: "Google OAuth callback (web)" })
+  @Get("google/callback")
+  @UseGuards(AuthGuard("google-agent"))
+  async googleCallback(
+    @Req() req: { user: GoogleUser },
+    @Res() res: Response,
+  ) {
+    const result = await this.agentAuthService.googleLogin(req.user);
+    const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+    // Encode the agent data as base64url so the frontend can read it without
+    // making a second API call (which would require the JWT guard to pass).
+    const agentB64 = Buffer.from(JSON.stringify(result.agent)).toString("base64url");
+    return res.redirect(
+      `${frontendUrl}/auth/google/callback?token=${result.access_token}&agent=${agentB64}`,
+    );
+  }
+
+  // ─── Google OAuth (mobile flow) ──────────────────────────────────────────────
+
+  /**
+   * Mobile sends the Google ID token obtained from @react-native-google-signin.
+   * Backend verifies it and returns a JWT.
+   */
+  @ApiOperation({ summary: "Google Sign-In for mobile — send ID token, receive JWT" })
+  @Post("google/mobile")
+  googleMobile(@Body("idToken") idToken: string) {
+    return this.agentAuthService.googleMobileLogin(idToken);
   }
 }

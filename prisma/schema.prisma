@@ -231,6 +231,7 @@ model Agent {
   whatsappNumber   String?
   resetToken       String?
   resetTokenExpiry DateTime?
+  googleId         String?   @unique
 
   // --- Email OTP verification (self-signup flow) ---
   emailVerified  Boolean   @default(false)

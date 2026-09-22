@@ -9,6 +9,7 @@ import {
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcrypt";
 import * as crypto from "crypto";
+import { OAuth2Client } from "google-auth-library";
 import { MailService } from "../../mail/mail.service";
 import { WhatsappService } from "../../whatsapp/whatsapp.service";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -320,6 +321,120 @@ export class AgentAuthService {
       data: { passwordHash },
     });
     return { message: "Password updated successfully" };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Google OAuth
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Called by the web OAuth callback after Google redirects back.
+   * Finds or creates an agent by googleId / email, returns a JWT.
+   */
+  async googleLogin(profile: {
+    googleId: string;
+    name: string;
+    email: string | null;
+    photo: string | null;
+  }) {
+    return this.findOrCreateGoogleAgent(profile);
+  }
+
+  /**
+   * Mobile flow: receives a Google ID token from the app, verifies it
+   * server-side using google-auth-library, then finds or creates the agent.
+   *
+   * POST /auth/agent/google/mobile  { idToken: string }
+   */
+  async googleMobileLogin(idToken: string) {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) throw new BadRequestException("Google OAuth not configured");
+
+    const client = new OAuth2Client(clientId);
+    let ticket;
+    try {
+      ticket = await client.verifyIdToken({ idToken, audience: clientId });
+    } catch {
+      throw new UnauthorizedException("Invalid Google ID token");
+    }
+
+    const payload = ticket.getPayload();
+    if (!payload) throw new UnauthorizedException("Invalid Google token payload");
+
+    return this.findOrCreateGoogleAgent({
+      googleId: payload.sub,
+      name:     payload.name ?? "Agent",
+      email:    payload.email ?? null,
+      photo:    payload.picture ?? null,
+    });
+  }
+
+  private async findOrCreateGoogleAgent(profile: {
+    googleId: string;
+    name: string;
+    email: string | null;
+    photo: string | null;
+  }) {
+    // 1. Try to find by googleId
+    let agent = await this.prisma.agent.findUnique({
+      where: { googleId: profile.googleId },
+    });
+
+    // 2. Try to find by email and link the Google account
+    if (!agent && profile.email) {
+      agent = await this.prisma.agent.findUnique({
+        where: { email: profile.email },
+      });
+      if (agent) {
+        agent = await this.prisma.agent.update({
+          where: { id: agent.id },
+          data: { googleId: profile.googleId },
+        });
+      }
+    }
+
+    // 3. Create a new agent
+    if (!agent) {
+      if (!profile.email) {
+        throw new BadRequestException(
+          "Google account has no email address — cannot create an agent account",
+        );
+      }
+      agent = await this.prisma.agent.create({
+        data: {
+          googleId:     profile.googleId,
+          name:         profile.name,
+          email:        profile.email,
+          photo:        profile.photo ?? "",
+          emailVerified: true, // Google already verified the email
+          // passwordHash intentionally null — Google-only account
+          // verificationTier defaults to NON_VERIFIE — admin must still approve
+        } as any,
+      });
+
+      // Notify admin that a new agent signed up via Google
+      this.mail
+        .sendAdminAgentPendingApproval({
+          agentId:    agent.id,
+          agentName:  agent.name,
+          agentEmail: agent.email!,
+          agentPhone: agent.phoneNumber ?? "—",
+        })
+        .catch(() => {});
+    }
+
+    return {
+      access_token: this.jwt.sign({ sub: agent.id, role: "agent" }),
+      agent: {
+        id:               agent.id,
+        name:             agent.name,
+        email:            agent.email,
+        verificationTier: agent.verificationTier,
+        emailVerified:    agent.emailVerified,
+        agentType:        (agent as any).agentType ?? null,
+        agencyId:         (agent as any).agencyId ?? null,
+      },
+    };
   }
 
   // ---------------------------------------------------------------------------
