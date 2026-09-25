@@ -206,7 +206,10 @@ export class UploadsService implements OnModuleInit {
    * Validates photo dimensions — throws if any image is below the minimum size.
    * Called before watermarking so we reject bad photos early.
    */
-  private async validatePhotoDimensions(input: Buffer, filename: string): Promise<void> {
+  private async validatePhotoDimensions(
+    input: Buffer,
+    filename: string,
+  ): Promise<void> {
     const MIN_WIDTH = 800;
     const MIN_HEIGHT = 600;
     try {
@@ -221,7 +224,10 @@ export class UploadsService implements OnModuleInit {
     } catch (err: any) {
       // Re-throw dimension errors; swallow unreadable format errors gracefully
       if (err.message?.includes("trop petite")) throw err;
-      console.warn(`[uploads] Could not read metadata for ${filename}:`, err.message);
+      console.warn(
+        `[uploads] Could not read metadata for ${filename}:`,
+        err.message,
+      );
     }
   }
 
@@ -236,9 +242,8 @@ export class UploadsService implements OnModuleInit {
         const filename = tmpKey.split("/").pop();
         const newKey = `properties/${propertyId}/${filename}`;
 
-        // Download → validate dimensions → watermark → re-upload
+        // Download → watermark → re-upload
         const original = await this.downloadKey(tmpKey);
-        await this.validatePhotoDimensions(original, filename ?? tmpKey);
         const watermarked = await this.applyWatermark(original);
 
         await this.client.send(
