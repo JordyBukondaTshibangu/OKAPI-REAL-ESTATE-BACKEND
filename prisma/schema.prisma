@@ -345,7 +345,7 @@ model AgentComplaint {
 model AreaOfExpertise {
   id          String @id @default(uuid())
   agentId     String
-  agent       Agent  @relation(fields: [agentId], references: [id])
+  agent       Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   name        String
   description String
@@ -359,7 +359,7 @@ model AreaOfExpertise {
 model TrackRecord {
   id           String @id @default(uuid())
   agentId      String
-  agent        Agent  @relation(fields: [agentId], references: [id])
+  agent        Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
   location     String
   building     String
@@ -372,7 +372,7 @@ model TrackRecord {
 model Property {
   id              String   @id @default(uuid())
   agentId         String
-  agent           Agent    @relation(fields: [agentId], references: [id])
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
   // Optional: independent agents submit without an agency
   agencyId        String?
   agency          Agency?  @relation(fields: [agencyId], references: [id])
