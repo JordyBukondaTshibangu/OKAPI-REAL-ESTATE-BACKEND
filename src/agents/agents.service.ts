@@ -123,36 +123,51 @@ export class AgentsService {
 
     // Compute real counts live so stored counters can never be stale
     const agentIds = data.map((a) => a.id);
-    const [saleCounts, rentCounts, reviewCounts, ratingAggs] = await Promise.all([
-      this.prisma.property.groupBy({
-        by: ['agentId'],
-        where: { agentId: { in: agentIds }, status: 'LIVE', isPublished: true, listingType: 'sale' },
-        _count: { _all: true },
-      }),
-      this.prisma.property.groupBy({
-        by: ['agentId'],
-        where: { agentId: { in: agentIds }, status: 'LIVE', isPublished: true, listingType: 'rent' },
-        _count: { _all: true },
-      }),
-      // Total review count (all reviews, including pending moderation)
-      this.prisma.review.groupBy({
-        by: ['agentId'],
-        where: { agentId: { in: agentIds } },
-        _count: { _all: true },
-      }),
-      // Average rating of visible (approved) reviews only
-      this.prisma.review.groupBy({
-        by: ['agentId'],
-        where: { agentId: { in: agentIds }, isVisible: true },
-        _avg: { rating: true },
-        _count: { _all: true },
-      }),
-    ]);
+    const [saleCounts, rentCounts, reviewCounts, ratingAggs] =
+      await Promise.all([
+        this.prisma.property.groupBy({
+          by: ["agentId"],
+          where: {
+            agentId: { in: agentIds },
+            status: "LIVE",
+            isPublished: true,
+            listingType: "sale",
+          },
+          _count: { _all: true },
+        }),
+        this.prisma.property.groupBy({
+          by: ["agentId"],
+          where: {
+            agentId: { in: agentIds },
+            status: "LIVE",
+            isPublished: true,
+            listingType: "rent",
+          },
+          _count: { _all: true },
+        }),
+        // Total review count (all reviews, including pending moderation)
+        this.prisma.review.groupBy({
+          by: ["agentId"],
+          where: { agentId: { in: agentIds } },
+          _count: { _all: true },
+        }),
+        // Average rating of visible (approved) reviews only
+        this.prisma.review.groupBy({
+          by: ["agentId"],
+          where: { agentId: { in: agentIds }, isVisible: true },
+          _avg: { rating: true },
+          _count: { _all: true },
+        }),
+      ]);
 
     const saleMap = new Map(saleCounts.map((r) => [r.agentId, r._count._all]));
     const rentMap = new Map(rentCounts.map((r) => [r.agentId, r._count._all]));
-    const reviewCountMap = new Map(reviewCounts.map((r) => [r.agentId, r._count._all]));
-    const ratingMap = new Map(ratingAggs.map((r) => [r.agentId, r._avg?.rating ?? 0]));
+    const reviewCountMap = new Map(
+      reviewCounts.map((r) => [r.agentId, r._count._all]),
+    );
+    const ratingMap = new Map(
+      ratingAggs.map((r) => [r.agentId, r._avg?.rating ?? 0]),
+    );
 
     return {
       data: data.map((agent) => ({
@@ -167,26 +182,41 @@ export class AgentsService {
   }
 
   async findOne(id: string) {
-    const [agent, saleCount, rentCount, reviewTotal, ratingAgg] = await Promise.all([
-      this.prisma.agent.findUnique({
-        where: { id },
-        include: {
-          agency: true,
-          areasOfExpertise: true,
-          trackRecord: true,
-          properties: true,
-        },
-      }),
-      this.prisma.property.count({ where: { agentId: id, status: 'LIVE', isPublished: true, listingType: 'sale' } }),
-      this.prisma.property.count({ where: { agentId: id, status: 'LIVE', isPublished: true, listingType: 'rent' } }),
-      // Total review count (all reviews)
-      this.prisma.review.count({ where: { agentId: id } }),
-      // Average rating of visible reviews only
-      this.prisma.review.aggregate({
-        where: { agentId: id, isVisible: true },
-        _avg: { rating: true },
-      }),
-    ]);
+    const [agent, saleCount, rentCount, reviewTotal, ratingAgg] =
+      await Promise.all([
+        this.prisma.agent.findUnique({
+          where: { id },
+          include: {
+            agency: true,
+            areasOfExpertise: true,
+            trackRecord: true,
+            properties: true,
+          },
+        }),
+        this.prisma.property.count({
+          where: {
+            agentId: id,
+            status: "LIVE",
+            isPublished: true,
+            listingType: "sale",
+          },
+        }),
+        this.prisma.property.count({
+          where: {
+            agentId: id,
+            status: "LIVE",
+            isPublished: true,
+            listingType: "rent",
+          },
+        }),
+        // Total review count (all reviews)
+        this.prisma.review.count({ where: { agentId: id } }),
+        // Average rating of visible reviews only
+        this.prisma.review.aggregate({
+          where: { agentId: id, isVisible: true },
+          _avg: { rating: true },
+        }),
+      ]);
     if (!agent) throw new NotFoundException("Agent not found");
     return {
       ...this.withPhotoUrl(agent),
@@ -404,16 +434,33 @@ export class AgentsService {
   }
 
   async getPendingVerification() {
-    return this.prisma.agent.findMany({
+    const agents = await this.prisma.agent.findMany({
       where: { profileComplete: true, idDocumentStatus: "PENDING" },
       select: {
-        id: true, name: true, email: true, phoneNumber: true, photo: true,
-        agentType: true, idDocumentUrl: true, selfieUrl: true,
-        dateOfBirth: true, residenceCommune: true, communes: true,
-        createdAt: true, idDocumentStatus: true, idDocumentRejectionReason: true,
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        photo: true,
+        agentType: true,
+        idDocumentUrl: true,
+        selfieUrl: true,
+        dateOfBirth: true,
+        residenceCommune: true,
+        communes: true,
+        createdAt: true,
+        idDocumentStatus: true,
+        idDocumentRejectionReason: true,
       },
       orderBy: { createdAt: "asc" },
     });
+    // Convert R2 storage keys to full CDN URLs for the dashboard to display
+    return agents.map((a) => ({
+      ...a,
+      photo: a.photo ? toR2Url(a.photo) : null,
+      idDocumentUrl: a.idDocumentUrl ? toR2Url(a.idDocumentUrl) : null,
+      selfieUrl: a.selfieUrl ? toR2Url(a.selfieUrl) : null,
+    }));
   }
 
   async reviewIdentity(agentId: string, approved: boolean, reason?: string) {
