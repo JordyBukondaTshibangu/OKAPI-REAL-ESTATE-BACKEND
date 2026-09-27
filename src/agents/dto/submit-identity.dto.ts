@@ -10,7 +10,7 @@ export enum ExperienceRange {
 export class SubmitIdentityDto {
   @IsDateString() dateOfBirth: string;
   @IsString() nationalIdNumber: string;
-  @IsString() nationalIdPhotoUrl: string;
+  @IsString() idDocumentUrl: string;
   @IsOptional() @IsString() selfieUrl?: string;
   @IsOptional() @IsString() residenceCommune?: string;
   @IsOptional() @IsEnum(ExperienceRange) experienceRange?: ExperienceRange;

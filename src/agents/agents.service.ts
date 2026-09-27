@@ -391,7 +391,7 @@ export class AgentsService {
       data: {
         dateOfBirth: new Date(dto.dateOfBirth),
         nationalIdNumber: hashed,
-        idDocumentUrl: dto.nationalIdPhotoUrl,
+        idDocumentUrl: dto.idDocumentUrl,
         selfieUrl: dto.selfieUrl,
         residenceCommune: dto.residenceCommune,
         experienceRange: dto.experienceRange as any,
