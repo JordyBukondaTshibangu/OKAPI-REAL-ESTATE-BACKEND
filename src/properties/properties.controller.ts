@@ -101,6 +101,13 @@ export class PropertiesController {
     return this.propertiesService.findMine(req.user.agentId, status);
   }
 
+  /** All enquiries sent on the agent's properties (agent-auth). */
+  @UseGuards(JwtAgentGuard)
+  @Get("mine/enquiries")
+  getMyEnquiries(@Req() req: AgentRequest) {
+    return this.propertiesService.getEnquiriesForAgent(req.user.agentId);
+  }
+
   /** Agent updates their own listing. */
   @UseGuards(JwtAgentGuard)
   @Patch("mine/:id")

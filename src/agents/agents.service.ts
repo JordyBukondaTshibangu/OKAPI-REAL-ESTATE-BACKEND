@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { AgentPlan } from "@prisma/client";
+import * as bcrypt from "bcrypt";
 import { PrismaService } from "../prisma/prisma.service";
 import { toR2Url, UploadsService } from "../uploads/uploads.service";
 import { CreateAgentDto } from "./dto/create-agent.dto";
@@ -12,6 +13,7 @@ import { FilterAgentDto } from "./dto/filter-agent.dto";
 import { UpdateAgentDto } from "./dto/update-agent.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
 import { UpdateMyAgencyDto } from "./dto/update-my-agency.dto";
+import { SubmitIdentityDto } from "./dto/submit-identity.dto";
 
 @Injectable()
 export class AgentsService {
@@ -376,5 +378,57 @@ export class AgentsService {
       data: { isSuspended: false, suspendedAt: null, suspendedReason: null },
     });
     return this.withPhotoUrl(agent);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Identity verification (self-service + admin review)
+  // ---------------------------------------------------------------------------
+
+  async submitIdentity(agentId: string, dto: SubmitIdentityDto) {
+    const hashed = await bcrypt.hash(dto.nationalIdNumber, 10);
+    return this.prisma.agent.update({
+      where: { id: agentId },
+      data: {
+        dateOfBirth: new Date(dto.dateOfBirth),
+        nationalIdNumber: hashed,
+        idDocumentUrl: dto.nationalIdPhotoUrl,
+        selfieUrl: dto.selfieUrl,
+        residenceCommune: dto.residenceCommune,
+        experienceRange: dto.experienceRange as any,
+        idDocumentStatus: "PENDING",
+        profileComplete: true,
+        idDocumentRejectionReason: null,
+      },
+      select: { id: true, idDocumentStatus: true, profileComplete: true },
+    });
+  }
+
+  async getPendingVerification() {
+    return this.prisma.agent.findMany({
+      where: { profileComplete: true, idDocumentStatus: "PENDING" },
+      select: {
+        id: true, name: true, email: true, phoneNumber: true, photo: true,
+        agentType: true, idDocumentUrl: true, selfieUrl: true,
+        dateOfBirth: true, residenceCommune: true, communes: true,
+        createdAt: true, idDocumentStatus: true, idDocumentRejectionReason: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+  }
+
+  async reviewIdentity(agentId: string, approved: boolean, reason?: string) {
+    const data: Record<string, unknown> = {
+      idDocumentStatus: approved ? "APPROVED" : "REJECTED",
+      idDocumentRejectionReason: approved ? null : (reason ?? "Non conforme"),
+    };
+    if (approved) {
+      data.verificationTier = "VERIFIE";
+      data.verifiedAt = new Date();
+    }
+    return this.prisma.agent.update({
+      where: { id: agentId },
+      data,
+      select: { id: true, idDocumentStatus: true, verificationTier: true },
+    });
   }
 }

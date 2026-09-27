@@ -615,12 +615,25 @@ export class PropertiesService {
         { boostedUntil: { sort: "desc", nulls: "last" } },
         { createdAt: "desc" },
       ],
-      include: { agency: true, _count: { select: { favorites: true } } },
+      include: { agency: true, _count: { select: { favorites: true, enquiries: true } } },
     });
     return data.map((p) => ({
       ...this.withPerformance(this.withGalleryUrls(p)),
+      enquiryCount: p._count?.enquiries ?? 0,
       isBoosted: p.boostedUntil != null && p.boostedUntil > new Date(),
     }));
+  }
+
+  /** All enquiries received on the agent's properties, newest first. */
+  async getEnquiriesForAgent(agentId: string) {
+    return this.prisma.enquiry.findMany({
+      where: { property: { agentId } },
+      include: {
+        property: { select: { id: true, title: true, suburb: true, city: true } },
+        user: { select: { id: true, firstName: true, lastName: true, email: true, phoneNumber: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   /** Agent edits their own listing (only DRAFT, HIDDEN, or REJECTED can be edited freely). */

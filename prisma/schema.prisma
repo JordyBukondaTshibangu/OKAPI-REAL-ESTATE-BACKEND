@@ -99,6 +99,13 @@ enum AgencyVerificationStatus {
   REJECTED
 }
 
+enum ExperienceRange {
+  LESS_THAN_1
+  ONE_TO_3
+  THREE_TO_5
+  FIVE_PLUS
+}
+
 model Admin {
   id           String     @id @default(uuid())
   email        String     @unique
@@ -260,12 +267,21 @@ model Agent {
   verificationTier    AgentVerificationTier @default(NON_VERIFIE)
   idDocumentUrl        String?
   idDocumentStatus     DocumentReviewStatus  @default(PENDING)
+  idDocumentRejectionReason String?
   firstListingChecked  Boolean               @default(false)
   verifiedAt           DateTime?
   partnerSince         DateTime?
   lastTierCheckedAt    DateTime?
   complaintCount       Int                   @default(0)
   flagged              Boolean               @default(false)
+
+  // --- Identity verification (added: add_agent_identity_fields) ---
+  dateOfBirth        DateTime?
+  nationalIdNumber   String?
+  selfieUrl          String?
+  residenceCommune   String?
+  profileComplete    Boolean   @default(false)
+  experienceRange    ExperienceRange?
 
   createdAt        DateTime @default(now())
 

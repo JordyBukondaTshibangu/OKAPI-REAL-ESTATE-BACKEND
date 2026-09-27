@@ -13,6 +13,13 @@ enum RentalFocus {
   BOTH = "BOTH",
 }
 
+enum ExperienceRange {
+  LESS_THAN_1 = "LESS_THAN_1",
+  ONE_TO_3 = "ONE_TO_3",
+  THREE_TO_5 = "THREE_TO_5",
+  FIVE_PLUS = "FIVE_PLUS",
+}
+
 // Deliberately excludes agencyId, photo, and every verification/tier field —
 // an agent can build their own profile, but can't self-assign an agency
 // affiliation or touch trust-tier state through this endpoint.
@@ -33,4 +40,6 @@ export class UpdateMyProfileDto {
   @IsOptional() @IsArray() @IsString({ each: true }) languages?: string[];
   @IsOptional() @IsInt() yearsExperience?: number;
   @IsOptional() @IsInt() experienceSince?: number;
+  @IsOptional() @IsString() residenceCommune?: string;
+  @IsOptional() @IsEnum(ExperienceRange) experienceRange?: ExperienceRange;
 }

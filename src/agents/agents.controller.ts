@@ -20,6 +20,7 @@ import { UpdateAgentDto } from "./dto/update-agent.dto";
 import { UpdateMyProfileDto } from "./dto/update-my-profile.dto";
 import { UpdateMyAgencyDto } from "./dto/update-my-agency.dto";
 import { UpdatePhotoDto } from "./dto/update-photo.dto";
+import { SubmitIdentityDto } from "./dto/submit-identity.dto";
 
 interface AgentRequest {
   user: { agentId: string; role: string };
@@ -53,6 +54,24 @@ export class AgentsController {
   @Patch("me/photo")
   updateMyPhoto(@Req() req: AgentRequest, @Body() dto: UpdatePhotoDto) {
     return this.agentsService.updateMyPhoto(req.user.agentId, dto.key);
+  }
+
+  @UseGuards(JwtAgentGuard)
+  @Patch("me/identity")
+  submitIdentity(@Req() req: AgentRequest, @Body() dto: SubmitIdentityDto) {
+    return this.agentsService.submitIdentity(req.user.agentId, dto);
+  }
+
+  @UseGuards(JwtAdminGuard)
+  @Get("pending-verification")
+  getPendingVerification() {
+    return this.agentsService.getPendingVerification();
+  }
+
+  @UseGuards(JwtAdminGuard)
+  @Patch(":id/review-identity")
+  reviewIdentity(@Param("id") id: string, @Body() dto: { approved: boolean; reason?: string }) {
+    return this.agentsService.reviewIdentity(id, dto.approved, dto.reason);
   }
 
   @Get()
