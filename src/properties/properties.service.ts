@@ -595,19 +595,32 @@ export class PropertiesService {
     return this.withPerformance(property).performance;
   }
 
-  async remove(id: string) {
+  /** Admin soft-deletes a listing — data is never physically removed. */
+  async remove(id: string, reason?: string) {
     await this.findOne(id);
-    await this.prisma.property.delete({ where: { id } });
+    await this.prisma.property.update({
+      where: { id },
+      data: {
+        status: "DELETED_BY_ADMIN",
+        isPublished: false,
+        deletedAt: new Date(),
+        deletedBy: "admin",
+        ...(reason ? { deletionReason: reason } : {}),
+      },
+    });
     return { message: "Property deleted" };
   }
 
   // ── Agent self-service: listing lifecycle ─────────────────────────────────
 
-  /** Agent's own listings — all statuses, ordered by newest first. */
+  /** Agent's own listings — excludes soft-deleted listings, ordered by newest first. */
   async findMine(agentId: string, status?: string) {
     const where: object = {
       agentId,
-      ...(status && { status }),
+      // Never surface soft-deleted listings in the agent's own view
+      status: status
+        ? status
+        : { notIn: ["DELETED_BY_AGENT", "DELETED_BY_ADMIN"] },
     };
     const data = await this.prisma.property.findMany({
       where,
@@ -678,14 +691,52 @@ export class PropertiesService {
     return this.withPerformance(this.withGalleryUrls(updated));
   }
 
-  /** Agent deletes their own listing (only DRAFT or HIDDEN). */
+  /** Agent soft-deletes their own listing.
+   *  Guardrails: blocked during an active boost; admin is flagged if pending reports exist. */
   async removeMine(id: string, agentId: string) {
-    const property = await this.prisma.property.findUnique({ where: { id } });
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+      include: { _count: { select: { reports: true } } },
+    });
     if (!property) throw new NotFoundException("Property not found");
-    if (property.agentId !== agentId)
-      throw new ForbiddenException("Access denied");
-    await this.prisma.property.delete({ where: { id } });
-    return { message: "Listing deleted" };
+    if (property.agentId !== agentId) throw new ForbiddenException("Access denied");
+
+    // Block if already soft-deleted
+    if (["DELETED_BY_AGENT", "DELETED_BY_ADMIN"].includes(property.status)) {
+      throw new BadRequestException("Cette annonce a déjà été supprimée.");
+    }
+
+    // Guard 1: active boost — cannot delete while boost is running
+    if (property.boostedUntil && property.boostedUntil > new Date()) {
+      const until = property.boostedUntil.toLocaleDateString("fr-FR", {
+        day: "2-digit", month: "long", year: "numeric",
+      });
+      throw new BadRequestException(
+        `Cette annonce a un boost actif jusqu'au ${until}. Vous pourrez la supprimer après cette date.`,
+      );
+    }
+
+    // Guard 2: pending reports — soft-delete is allowed but log it for admin audit
+    const pendingReports = await this.prisma.report.count({
+      where: { propertyId: id, status: "PENDING" },
+    });
+    if (pendingReports > 0) {
+      this.logger.warn(
+        `Agent ${agentId} deleted property ${id} which has ${pendingReports} pending report(s) — admin review recommended.`,
+      );
+    }
+
+    // Soft-delete: mark status, never hard-delete
+    await this.prisma.property.update({
+      where: { id },
+      data: {
+        status: "DELETED_BY_AGENT",
+        isPublished: false,
+        deletedAt: new Date(),
+        deletedBy: "agent",
+      },
+    });
+    return { message: "Listing supprimée" };
   }
 
   /** DRAFT / HIDDEN / REJECTED → PENDING (submitted for admin review). */

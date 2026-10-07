@@ -37,12 +37,14 @@ enum AgentVerificationTier {
 
 // Listing lifecycle — controls visibility and agent workflow.
 enum ListingStatus {
-  DRAFT      // saved but not submitted
-  PENDING    // submitted, awaiting admin spot-check
-  LIVE       // approved and publicly visible
-  HIDDEN     // manually hidden by agent
-  REJECTED   // admin rejected — reason stored in rejectionReason
-  EXPIRED    // past expiresAt date
+  DRAFT            // saved but not submitted
+  PENDING          // submitted, awaiting admin spot-check
+  LIVE             // approved and publicly visible
+  HIDDEN           // manually hidden by agent — reversible (can republish)
+  REJECTED         // admin rejected — reason stored in rejectionReason
+  EXPIRED          // past expiresAt date
+  DELETED_BY_AGENT // agent permanently removed the listing — irreversible
+  DELETED_BY_ADMIN // admin hard-removed the listing — irreversible
 }
 
 enum AgentType {
@@ -386,6 +388,10 @@ model Property {
   flagCount       Int           @default(0)
   whatsappClicks  Int           @default(0)
   coverImageIndex Int           @default(0)
+  // Soft-deletion audit trail (status → DELETED_BY_AGENT / DELETED_BY_ADMIN)
+  deletedAt       DateTime?
+  deletedBy       String?       // 'agent' | 'admin'
+  deletionReason  String?
 
   listingType     String
   category        String

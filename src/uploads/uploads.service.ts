@@ -175,8 +175,8 @@ export class UploadsService implements OnModuleInit {
       const width = meta.width ?? 800;
       const height = meta.height ?? 600;
 
-      // Scale the pre-baked watermark PNG to ~28% of the image width.
-      const targetW = Math.max(180, Math.round(width * 0.28));
+      // Scale the pre-baked watermark PNG to ~35% of the image width (centred).
+      const targetW = Math.max(200, Math.round(width * 0.35));
       const scaled = await sharp(WATERMARK_PNG)
         .resize(targetW, null, { fit: "inside" })
         .toBuffer();
@@ -184,10 +184,9 @@ export class UploadsService implements OnModuleInit {
       const wW = scaledMeta.width ?? targetW;
       const wH = scaledMeta.height ?? 50;
 
-      const marginRight = Math.round(width * 0.025);
-      const marginBottom = Math.round(height * 0.03);
-      const left = Math.max(0, width - wW - marginRight);
-      const top = Math.max(0, height - wH - marginBottom);
+      // Centre the watermark on the image
+      const left = Math.max(0, Math.round((width - wW) / 2));
+      const top = Math.max(0, Math.round((height - wH) / 2));
 
       return await sharp(input)
         .composite([{ input: scaled, top, left }])
@@ -199,35 +198,6 @@ export class UploadsService implements OnModuleInit {
         err,
       );
       return input;
-    }
-  }
-
-  /**
-   * Validates photo dimensions — throws if any image is below the minimum size.
-   * Called before watermarking so we reject bad photos early.
-   */
-  private async validatePhotoDimensions(
-    input: Buffer,
-    filename: string,
-  ): Promise<void> {
-    const MIN_WIDTH = 800;
-    const MIN_HEIGHT = 600;
-    try {
-      const meta = await sharp(input).metadata();
-      const w = meta.width ?? 0;
-      const h = meta.height ?? 0;
-      if (w < MIN_WIDTH || h < MIN_HEIGHT) {
-        throw new Error(
-          `Photo "${filename}" trop petite (${w}×${h} px). Minimum requis : ${MIN_WIDTH}×${MIN_HEIGHT} px.`,
-        );
-      }
-    } catch (err: any) {
-      // Re-throw dimension errors; swallow unreadable format errors gracefully
-      if (err.message?.includes("trop petite")) throw err;
-      console.warn(
-        `[uploads] Could not read metadata for ${filename}:`,
-        err.message,
-      );
     }
   }
 
