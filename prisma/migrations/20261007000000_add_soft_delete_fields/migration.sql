@@ -5,4 +5,5 @@ ALTER TYPE "ListingStatus" ADD VALUE IF NOT EXISTS 'DELETED_BY_ADMIN';
 -- Add soft-delete audit trail columns to Property
 ALTER TABLE "Property"
   ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3),
-  ADD COLUMN IF NOT EXISTS "deletedBy" TEXT;
+  ADD COLUMN IF NOT EXISTS "deletedBy" TEXT,
+  ADD COLUMN IF NOT EXISTS "deletionReason" TEXT;
