@@ -11,7 +11,7 @@ export class SubmitIdentityDto {
   @IsDateString() dateOfBirth: string;
   @IsString() nationalIdNumber: string;
   @IsString() idDocumentUrl: string;
-  @IsOptional() @IsString() selfieUrl?: string;
+  @IsString() selfieUrl: string;
   @IsOptional() @IsString() residenceCommune?: string;
   @IsOptional() @IsEnum(ExperienceRange) experienceRange?: ExperienceRange;
 }
