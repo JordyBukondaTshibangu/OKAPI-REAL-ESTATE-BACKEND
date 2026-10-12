@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { JwtAdminGuard } from "../auth/guards/jwt-admin.guard";
 import { JwtUserGuard } from "../auth/guards/jwt-user.guard";
+import { OptionalJwtUserGuard } from "../auth/guards/optional-jwt-user.guard";
 import { CreateReviewDto } from "./dto/create-review.dto";
 import { ReviewsService } from "./reviews.service";
 
@@ -43,9 +44,14 @@ export class ReviewsController {
   }
 
   @ApiOperation({ summary: "Get reviews for an agent" })
+  @UseGuards(OptionalJwtUserGuard)
   @Get("agent/:agentId")
-  getAgentReviews(@Param("agentId") agentId: string) {
-    return this.reviewsService.getAgentReviews(agentId);
+  getAgentReviews(
+    @Param("agentId") agentId: string,
+    @Request() req: any,
+  ) {
+    const currentUserId = req.user?.userId ?? null;
+    return this.reviewsService.getAgentReviews(agentId, currentUserId);
   }
 
   @ApiOperation({ summary: "Delete a review" })

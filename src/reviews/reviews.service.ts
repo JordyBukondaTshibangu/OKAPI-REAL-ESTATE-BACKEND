@@ -17,22 +17,23 @@ export class ReviewsService {
    * then persists it. Called after every review create/delete.
    */
   private async recalculateAgentGrade(agentId: string): Promise<void> {
-    const [visibleReviews, allReviews, activeListings, agent] = await Promise.all([
-      // Only approved (visible) reviews count toward grade and displayed rating
-      this.prisma.review.findMany({
-        where: { agentId, isVisible: true },
-        select: { rating: true },
-      }),
-      // All reviews (including pending) count for the public ratingsCount display
-      this.prisma.review.count({ where: { agentId } }),
-      this.prisma.property.count({
-        where: { agentId, status: 'LIVE', isPublished: true },
-      }),
-      this.prisma.agent.findUnique({
-        where: { id: agentId },
-        select: { createdAt: true, isSuspended: true, suspendedAt: true },
-      }),
-    ]);
+    const [visibleReviews, allReviews, activeListings, agent] =
+      await Promise.all([
+        // Only approved (visible) reviews count toward grade and displayed rating
+        this.prisma.review.findMany({
+          where: { agentId, isVisible: true },
+          select: { rating: true },
+        }),
+        // All reviews (including pending) count for the public ratingsCount display
+        this.prisma.review.count({ where: { agentId } }),
+        this.prisma.property.count({
+          where: { agentId, status: "LIVE", isPublished: true },
+        }),
+        this.prisma.agent.findUnique({
+          where: { id: agentId },
+          select: { createdAt: true, isSuspended: true, suspendedAt: true },
+        }),
+      ]);
 
     if (!agent) return;
 
@@ -161,9 +162,17 @@ export class ReviewsService {
     });
   }
 
-  async getAgentReviews(agentId: string) {
+  async getAgentReviews(agentId: string, currentUserId?: string) {
     return this.prisma.review.findMany({
-      where: { agentId, isVisible: true },
+      where: {
+        agentId,
+        OR: [
+          { isVisible: true },
+          // Always include the requesting user's own review so they can see it
+          // even while it's pending moderation.
+          ...(currentUserId ? [{ userId: currentUserId }] : []),
+        ],
+      },
       include: {
         user: { select: { id: true, firstName: true, lastName: true } },
       },
