@@ -263,9 +263,19 @@ export class PropertiesService {
     // prefix so they survive the tmp/ lifecycle expiry rule.
     let promoted = property;
     try {
+      // Fetch agent name for watermark overlay (best-effort, no throw)
+      let agentName: string | undefined;
+      if (agentId) {
+        const agent = await this.prisma.agent.findUnique({
+          where: { id: agentId },
+          select: { name: true },
+        });
+        agentName = agent?.name ?? undefined;
+      }
       const promotedKeys = await this.uploads.promoteKeys(
         property.gallery,
         property.id,
+        agentName,
       );
       promoted = await this.prisma.property.update({
         where: { id: property.id },
@@ -673,7 +683,12 @@ export class PropertiesService {
     const tmpKeys = galleryKeys.filter((k: string) => k.startsWith("tmp/"));
     if (tmpKeys.length > 0) {
       try {
-        const permanentKeys = await this.uploads.promoteKeys(tmpKeys, id);
+        // Fetch agent name for watermark overlay (best-effort)
+        const agent = await this.prisma.agent.findUnique({
+          where: { id: agentId },
+          select: { name: true },
+        });
+        const permanentKeys = await this.uploads.promoteKeys(tmpKeys, id, agent?.name ?? undefined);
         galleryKeys = galleryKeys.map((k: string) => {
           const idx = tmpKeys.indexOf(k);
           return idx >= 0 ? permanentKeys[idx] : k;

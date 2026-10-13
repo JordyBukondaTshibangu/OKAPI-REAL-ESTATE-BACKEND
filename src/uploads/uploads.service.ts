@@ -15,14 +15,14 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { PresignFileDto } from "./dto/presign-upload.dto";
 
-// Pre-baked watermark PNG (277×50, gold text on navy, generated at build time).
-// Loaded once at module load — avoids any runtime font dependency.
-const WATERMARK_PNG: Buffer = (() => {
-  // Try multiple candidate paths so this works whether running from:
-  //   - compiled dist  (__dirname = .../dist/src/uploads)
-  //   - ts-node dev    (__dirname = .../src/uploads)
-  //   - project root fallback
+// Okapi logo PNG — used as the centred watermark on every property photo.
+// Loaded once at module load to avoid repeated I/O.
+const LOGO_PNG: Buffer = (() => {
   const candidates = [
+    join(__dirname, "logo.png"),
+    join(__dirname, "..", "..", "..", "src", "uploads", "logo.png"),
+    join(process.cwd(), "src", "uploads", "logo.png"),
+    // Fallback to legacy watermark.png if logo hasn't been deployed yet
     join(__dirname, "watermark.png"),
     join(__dirname, "..", "..", "..", "src", "uploads", "watermark.png"),
     join(process.cwd(), "src", "uploads", "watermark.png"),
@@ -30,7 +30,7 @@ const WATERMARK_PNG: Buffer = (() => {
   for (const p of candidates) {
     if (existsSync(p)) return readFileSync(p);
   }
-  throw new Error(`watermark.png not found. Tried:\n${candidates.join("\n")}`);
+  throw new Error(`logo.png not found. Tried:\n${candidates.join("\n")}`);
 })();
 
 export function toR2Url(key: string): string {
@@ -166,30 +166,92 @@ export class UploadsService implements OnModuleInit {
   }
 
   /**
-   * Applies a subtle "Okapi Real Estate" watermark to an image buffer.
+   * Applies the Okapi logo as a centred watermark and optionally overlays
+   * the agent's name at the top-left and bottom-right corners.
    * Falls back to the original bytes if sharp fails (e.g. unsupported format).
    */
-  private async applyWatermark(input: Buffer): Promise<Buffer> {
+  private async applyWatermark(
+    input: Buffer,
+    agentName?: string,
+  ): Promise<Buffer> {
     try {
       const meta = await sharp(input).metadata();
       const width = meta.width ?? 800;
       const height = meta.height ?? 600;
 
-      // Scale the pre-baked watermark PNG to ~35% of the image width (centred).
-      const targetW = Math.max(200, Math.round(width * 0.35));
-      const scaled = await sharp(WATERMARK_PNG)
-        .resize(targetW, null, { fit: "inside" })
+      // ── 1. Centre logo ─────────────────────────────────────────────────────
+      // Scale the logo to ~38% of the image width, then reduce to ~18% opacity
+      // so the photo shows through clearly (same style as industry watermarks).
+      const logoTargetW = Math.max(200, Math.round(width * 0.38));
+      const logoResized = await sharp(LOGO_PNG)
+        .resize(logoTargetW, null, { fit: "inside" })
+        .ensureAlpha()
+        .png()
         .toBuffer();
-      const scaledMeta = await sharp(scaled).metadata();
-      const wW = scaledMeta.width ?? targetW;
-      const wH = scaledMeta.height ?? 50;
 
-      // Centre the watermark on the image
-      const left = Math.max(0, Math.round((width - wW) / 2));
-      const top = Math.max(0, Math.round((height - wH) / 2));
+      // Reduce alpha channel to 18% via raw pixel manipulation
+      const { data: rawData, info: rawInfo } = await sharp(logoResized)
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      for (let i = 3; i < rawData.length; i += 4) {
+        rawData[i] = Math.round(rawData[i] * 0.18);
+      }
+      const logoTransparent = await sharp(rawData, {
+        raw: { width: rawInfo.width, height: rawInfo.height, channels: 4 },
+      })
+        .png()
+        .toBuffer();
+
+      const lW = rawInfo.width;
+      const lH = rawInfo.height;
+      const logoLeft = Math.max(0, Math.round((width - lW) / 2));
+      const logoTop = Math.max(0, Math.round((height - lH) / 2));
+
+      const composites: sharp.OverlayOptions[] = [
+        { input: logoTransparent, top: logoTop, left: logoLeft, blend: "over" },
+      ];
+
+      // ── 2. Agent name text overlays (top-left + bottom-right) ──────────────
+      if (agentName) {
+        const fontSize = Math.max(14, Math.round(width * 0.025));
+        const padding = Math.round(fontSize * 0.8);
+        const safe = agentName.replace(/[<>&"']/g, (c) =>
+          ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c] ?? c),
+        );
+
+        // Semi-transparent dark pill background + white text
+        const makeLabelSvg = (text: string, w: number, h: number, anchor: "start" | "end", x: number, y: number) => `
+<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+  <rect x="${anchor === "end" ? x - (text.length * fontSize * 0.6 + padding * 2) : x}"
+        y="${y - fontSize - padding / 2}"
+        width="${Math.round(text.length * fontSize * 0.6 + padding * 2)}"
+        height="${fontSize + padding}"
+        rx="4" ry="4"
+        fill="rgba(0,0,0,0.45)" />
+  <text x="${x}" y="${y - padding / 4}"
+        font-family="Arial, sans-serif"
+        font-size="${fontSize}"
+        font-weight="bold"
+        fill="white"
+        text-anchor="${anchor}"
+        opacity="0.9">${text}</text>
+</svg>`;
+
+        const topLeftSvg = Buffer.from(
+          makeLabelSvg(safe, width, height, "start", padding, fontSize + padding),
+        );
+        const bottomRightSvg = Buffer.from(
+          makeLabelSvg(safe, width, height, "end", width - padding, height - padding),
+        );
+
+        composites.push(
+          { input: topLeftSvg, top: 0, left: 0, blend: "over" },
+          { input: bottomRightSvg, top: 0, left: 0, blend: "over" },
+        );
+      }
 
       return await sharp(input)
-        .composite([{ input: scaled, top, left }])
+        .composite(composites)
         .jpeg({ quality: 88 })
         .toBuffer();
     } catch (err) {
@@ -206,7 +268,7 @@ export class UploadsService implements OnModuleInit {
    * permanent properties/{propertyId}/ key, then deletes the tmp/ originals.
    * Returns the new permanent keys in the same order as the input.
    */
-  async promoteKeys(tmpKeys: string[], propertyId: string): Promise<string[]> {
+  async promoteKeys(tmpKeys: string[], propertyId: string, agentName?: string): Promise<string[]> {
     const promotedKeys = await Promise.all(
       tmpKeys.map(async (tmpKey) => {
         const filename = tmpKey.split("/").pop();
@@ -214,7 +276,7 @@ export class UploadsService implements OnModuleInit {
 
         // Download → watermark → re-upload
         const original = await this.downloadKey(tmpKey);
-        const watermarked = await this.applyWatermark(original);
+        const watermarked = await this.applyWatermark(original, agentName);
 
         await this.client.send(
           new PutObjectCommand({
