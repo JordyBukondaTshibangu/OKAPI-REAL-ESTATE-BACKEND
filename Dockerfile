@@ -21,8 +21,8 @@ FROM node:22-slim AS runner
 
 WORKDIR /app
 
-# Install OpenSSL for Prisma
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Install OpenSSL for Prisma + Liberation fonts for SVG text rendering (watermark)
+RUN apt-get update -y && apt-get install -y openssl fonts-liberation && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
@@ -30,7 +30,8 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
 COPY package.json ./
 COPY docker-entrypoint.sh ./
-# Copy the pre-baked watermark PNG so it is available at runtime next to the compiled JS
+# Copy logo and legacy watermark PNGs so they are available at runtime
+COPY src/uploads/logo.png ./dist/src/uploads/logo.png
 COPY src/uploads/watermark.png ./dist/src/uploads/watermark.png
 RUN chmod +x ./docker-entrypoint.sh
 

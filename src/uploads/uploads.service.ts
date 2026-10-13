@@ -215,12 +215,27 @@ export class UploadsService implements OnModuleInit {
       if (agentName) {
         const fontSize = Math.max(14, Math.round(width * 0.025));
         const padding = Math.round(fontSize * 0.8);
-        const safe = agentName.replace(/[<>&"']/g, (c) =>
-          ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c] ?? c),
+        const safe = agentName.replace(
+          /[<>&"']/g,
+          (c) =>
+            ({
+              "<": "&lt;",
+              ">": "&gt;",
+              "&": "&amp;",
+              '"': "&quot;",
+              "'": "&apos;",
+            })[c] ?? c,
         );
 
         // Semi-transparent dark pill background + white text
-        const makeLabelSvg = (text: string, w: number, h: number, anchor: "start" | "end", x: number, y: number) => `
+        const makeLabelSvg = (
+          text: string,
+          w: number,
+          h: number,
+          anchor: "start" | "end",
+          x: number,
+          y: number,
+        ) => `
 <svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
   <rect x="${anchor === "end" ? x - (text.length * fontSize * 0.6 + padding * 2) : x}"
         y="${y - fontSize - padding / 2}"
@@ -229,7 +244,7 @@ export class UploadsService implements OnModuleInit {
         rx="4" ry="4"
         fill="rgba(0,0,0,0.45)" />
   <text x="${x}" y="${y - padding / 4}"
-        font-family="Arial, sans-serif"
+        font-family="Liberation Sans, DejaVu Sans, FreeSans, sans-serif"
         font-size="${fontSize}"
         font-weight="bold"
         fill="white"
@@ -238,10 +253,24 @@ export class UploadsService implements OnModuleInit {
 </svg>`;
 
         const topLeftSvg = Buffer.from(
-          makeLabelSvg(safe, width, height, "start", padding, fontSize + padding),
+          makeLabelSvg(
+            safe,
+            width,
+            height,
+            "start",
+            padding,
+            fontSize + padding,
+          ),
         );
         const bottomRightSvg = Buffer.from(
-          makeLabelSvg(safe, width, height, "end", width - padding, height - padding),
+          makeLabelSvg(
+            safe,
+            width,
+            height,
+            "end",
+            width - padding,
+            height - padding,
+          ),
         );
 
         composites.push(
@@ -268,7 +297,11 @@ export class UploadsService implements OnModuleInit {
    * permanent properties/{propertyId}/ key, then deletes the tmp/ originals.
    * Returns the new permanent keys in the same order as the input.
    */
-  async promoteKeys(tmpKeys: string[], propertyId: string, agentName?: string): Promise<string[]> {
+  async promoteKeys(
+    tmpKeys: string[],
+    propertyId: string,
+    agentName?: string,
+  ): Promise<string[]> {
     const promotedKeys = await Promise.all(
       tmpKeys.map(async (tmpKey) => {
         const filename = tmpKey.split("/").pop();
